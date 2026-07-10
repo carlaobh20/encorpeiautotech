@@ -252,30 +252,31 @@ async function scanAll() {
 async function probeBms() {
   $('btnProbe').disabled = true;
   try {
-    log('===== SONDA BMS (UDS modo 22) =====');
-    await sendCmd('ATST32');
-    const headers = ['7DF', '7E4', '7E5', '7E6', '7E7'];
-    const dids = ['F190', 'F187', 'F18C', 'E101'];
-    for (let d = 0x0100; d <= 0x010F; d++) dids.push(d.toString(16).toUpperCase().padStart(4, '0'));
-    for (let d = 0xD001; d <= 0xD010; d++) dids.push(d.toString(16).toUpperCase());
-    for (let d = 0xB001; d <= 0xB010; d++) dids.push(d.toString(16).toUpperCase());
-    for (const h of headers) {
-      log('--- header ' + h + ' ---');
-      await sendCmd('ATSH' + h);
-      let hits = 0;
-      for (const d of dids) {
-        const r = await sendCmd('22' + d, 3000);
-        if (r && r.includes('62') && !/NO DATA|ERROR|\?/i.test(r)) {
-          log('22' + d + ' -> ' + r.replace(/\r/g, ' | '));
-          hits++;
-        }
-      }
-      log('header ' + h + ': ' + hits + ' respostas positivas');
+    log('===== SONDA BMS AMPLA (UDS 22, header 7DF) =====');
+    await sendCmd('ATST20');   // timeout ELM ~128ms: DIDs vazios respondem rapido
+    await sendCmd('ATSH7DF');  // broadcast funcional (o que respondeu antes)
+    // Identificacao / DIDs uteis conhecidos
+    log('--- identificacao ---');
+    for (const d of ['F190', 'F187', 'F18C', 'F191', 'F195', 'F1A0', 'F18A']) {
+      const r = await sendCmd('22' + d, 900);
+      if (r && r.includes('62')) log('22' + d + ' -> ' + r.replace(/\r/g, ' | '));
     }
-    await sendCmd('ATSH7DF');
-    log('===== FIM DA SONDA ===== Copie o log e me envie.');
-    setStatus('sonda BMS completa - copie o log', 'ok');
-  } catch (e) { log('ERRO na sonda: ' + e.message); }
+    // Varredura ampla: 220100 a 2201FF
+    log('--- varrendo 220100 ate 2201FF (aguarde ~1min) ---');
+    let hits = 0;
+    for (let d = 0x0100; d <= 0x01FF; d++) {
+      const did = d.toString(16).toUpperCase().padStart(4, '0');
+      const r = await sendCmd('22' + did, 700);
+      if (r && /62/.test(r) && !/NO DATA|ERROR|STOPPED|UNABLE|SEARCHING|\?/i.test(r)) {
+        log('22' + did + ' -> ' + r.replace(/\r/g, ' | '));
+        hits++;
+      }
+    }
+    log('varredura 0100-01FF: ' + hits + ' respostas positivas');
+    await sendCmd('ATST64'); // volta timeout ao padrao
+    log('===== FIM DA SONDA ===== Toque em Copiar log e me envie tudo.');
+    setStatus('sonda ampla completa - copie o log', 'ok');
+  } catch (e) { log('ERRO na sonda: ' + errStr(e)); }
   $('btnProbe').disabled = false;
 }
 
