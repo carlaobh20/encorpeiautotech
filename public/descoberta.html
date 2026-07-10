@@ -252,30 +252,51 @@ async function scanAll() {
 async function probeBms() {
   $('btnProbe').disabled = true;
   try {
-    log('===== SONDA BMS AMPLA (UDS 22, header 7DF) =====');
-    await sendCmd('ATST20');   // timeout ELM ~128ms: DIDs vazios respondem rapido
-    await sendCmd('ATSH7DF');  // broadcast funcional (o que respondeu antes)
-    // Identificacao / DIDs uteis conhecidos
-    log('--- identificacao ---');
-    for (const d of ['F190', 'F187', 'F18C', 'F191', 'F195', 'F1A0', 'F18A']) {
-      const r = await sendCmd('22' + d, 900);
-      if (r && r.includes('62')) log('22' + d + ' -> ' + r.replace(/\r/g, ' | '));
+    log('===== SONDA BMS + DESCOBERTA (UDS 22) =====');
+    await sendCmd('ATST20');   // timeout ELM ~128ms
+    await sendCmd('ATH1');     // headers ON (mostra o CAN ID de cada modulo)
+    await sendCmd('ATS1');     // espacos ON
+
+    // (1) DUMP BRUTO no broadcast 7DF — revela o endereco de cada ECU
+    await sendCmd('ATSH7DF');
+    log('--- (1) dump bruto 7DF (procurando o CAN ID do BMS) ---');
+    for (const did of ['220100', '22F190', '22F187', '22F18C', '22F195']) {
+      const r = await sendCmd(did, 1500);
+      log(did + ' RAW -> ' + r.replace(/\r/g, ' | '));
     }
-    // Varredura ampla: 220100 a 2201FF
-    log('--- varrendo 220100 ate 2201FF (aguarde ~1min) ---');
+
+    // (2) VARREDURA AMPLA de DIDs no 7DF
+    log('--- (2) varrendo 220100 a 2201FF ---');
     let hits = 0;
     for (let d = 0x0100; d <= 0x01FF; d++) {
       const did = d.toString(16).toUpperCase().padStart(4, '0');
-      const r = await sendCmd('22' + did, 700);
+      const r = await sendCmd('22' + did, 500);
       if (r && /62/.test(r) && !/NO DATA|ERROR|STOPPED|UNABLE|SEARCHING|\?/i.test(r)) {
         log('22' + did + ' -> ' + r.replace(/\r/g, ' | '));
         hits++;
       }
     }
-    log('varredura 0100-01FF: ' + hits + ' respostas positivas');
-    await sendCmd('ATST64'); // volta timeout ao padrao
-    log('===== FIM DA SONDA ===== Toque em Copiar log e me envie tudo.');
-    setStatus('sonda ampla completa - copie o log', 'ok');
+    log('varredura 0100-01FF: ' + hits + ' positivas');
+
+    // (3) DESCOBERTA DE HEADER FISICO — onde as celulas/temperaturas moram
+    log('--- (3) procurando o modulo BMS por header fisico ---');
+    const headers = ['7E0','7E1','7E2','7E3','7E4','7E5','7E6','7E7',
+                     '7B3','7A1','706','720','7C0','7C4','7D0','7DA','7E8','7EA'];
+    let found = 0;
+    for (const h of headers) {
+      await sendCmd('ATSH' + h);
+      const r = await sendCmd('220100', 600);
+      if (r && /62 ?01 ?00/i.test(r) && !/NO DATA|ERROR|STOPPED|UNABLE|SEARCHING|\?/i.test(r)) {
+        log('HEADER ' + h + ' responde -> ' + r.replace(/\r/g, ' | '));
+        found++;
+      }
+    }
+    log('headers fisicos que responderam: ' + found);
+
+    await sendCmd('ATSH7DF');
+    await sendCmd('ATST64');
+    log('===== FIM ===== Toque em Copiar log e me envie tudo.');
+    setStatus('sonda+descoberta completa - copie o log', 'ok');
   } catch (e) { log('ERRO na sonda: ' + errStr(e)); }
   $('btnProbe').disabled = false;
 }
