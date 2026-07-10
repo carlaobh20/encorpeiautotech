@@ -3,8 +3,10 @@ import type { VehicleData } from '../vehicle/types';
 /**
  * Trip Engine — consome o fluxo de VehicleData e acumula métricas.
  * Persistência local por enquanto; o formato TripRecord já é o schema
- * planejado para a tabela `trips` no Supabase (sincronização futura).
+ * planejado para a tabela "trips" no Supabase (sincronização futura).
  */
+
+export interface GeoPoint { lat: number; lng: number; t: number; }
 
 export interface TripRecord {
   id: string;
@@ -18,6 +20,10 @@ export interface TripRecord {
   maxSpeedKmh: number;
   socStart: number | null;
   socEnd: number | null;
+  origin: GeoPoint | null;       // de onde saiu (GPS)
+  destination: GeoPoint | null;  // destino (GPS)
+  path: GeoPoint[];              // trajeto completo
+  gpsDistanceKm: number;         // distancia medida por GPS
   synced: boolean;           // flag para sync Supabase
 }
 
@@ -34,7 +40,7 @@ export class TripEngine {
 
   start(initial: VehicleData | null) {
     this.current = {
-      id: `trip_${Date.now()}`,
+      id: 'trip_' + Date.now(),
       startedAt: Date.now(),
       endedAt: null,
       durationMs: 0,
@@ -45,6 +51,10 @@ export class TripEngine {
       maxSpeedKmh: 0,
       socStart: initial?.soc ?? null,
       socEnd: null,
+      origin: null,
+      destination: null,
+      path: [],
+      gpsDistanceKm: 0,
       synced: false,
     };
     this.state = 'running';
@@ -64,10 +74,29 @@ export class TripEngine {
     if (this.state === 'paused') this.state = 'running';
   }
 
+  /** Adiciona um ponto de GPS ao trajeto da viagem em andamento. */
+  addGeo(lat: number, lng: number) {
+    if (this.state !== 'running' || !this.current) return;
+    const p: GeoPoint = { lat, lng, t: Date.now() };
+    if (!this.current.origin) this.current.origin = p;
+    const path = this.current.path;
+    const last = path[path.length - 1];
+    if (!last) { path.push(p); return; }
+    const d = haversineKm(last.lat, last.lng, lat, lng);
+    if (d > 0.008) { // so registra se andou > 8m (filtra ruido de GPS parado)
+      this.current.gpsDistanceKm += d;
+      path.push(p);
+    }
+  }
+
   finish(last: VehicleData | null): TripRecord | null {
     if (!this.current) return null;
     this.current.endedAt = Date.now();
     this.current.socEnd = last?.soc ?? null;
+    const path = this.current.path;
+    if (path.length && !this.current.destination) {
+      this.current.destination = path[path.length - 1];
+    }
     const finished = this.current;
     saveTrip(finished);
     this.current = null;
@@ -114,4 +143,13 @@ function saveTrip(trip: TripRecord) {
   const all = loadTrips();
   all.unshift(trip);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all.slice(0, 200)));
+}
+
+export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }
