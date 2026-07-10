@@ -1,231 +1,231 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <title>Encorpei Auto - Descoberta Vgate</title>
-  <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { background: #0b0f14; color: #dfe7ef; font-family: -apple-system, system-ui, sans-serif; padding: 16px; }
-      h1 { font-size: 16px; letter-spacing: 2px; margin-bottom: 4px; }
-      h1 span { color: #38e0c0; }
-      .sub { color: #7a8794; font-size: 12px; margin-bottom: 14px; }
-      .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-      button { background: #16202b; color: #dfe7ef; border: 1px solid #2a3744; border-radius: 10px; padding: 12px 14px; font-size: 14px; flex: 1 1 40%; }
-      button.primary { background: #38e0c0; color: #06231d; font-weight: 700; border: none; }
-      button:disabled { opacity: .35; }
-      #status { font-size: 13px; padding: 8px 12px; border-radius: 8px; background: #131b24; margin-bottom: 10px; }
-      #status.ok { color: #38e0c0; }
-      #status.err { color: #ff7a7a; }
-      #live { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
-      .card { background: #131b24; border-radius: 10px; padding: 10px; }
-      .card .k { color: #7a8794; font-size: 11px; text-transform: uppercase; }
-      .card .v { font-size: 20px; font-weight: 700; }
-      #log { background: #0e141b; border: 1px solid #1c2733; border-radius: 10px; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; height: 45vh; overflow-y: auto; }
-      .warn { background: #2b1d10; color: #ffbf69; padding: 10px; border-radius: 10px; font-size: 13px; margin-bottom: 12px; }
-    </style>
-  </head>
-  <body>
-    <h1>ENCORPEI <span>AUTO</span> - MODO DESCOBERTA</h1>
-  <div class="sub">Vgate iCar Pro BLE 4.0 + GAC Aion UT</div>div>
-  <div id="bleWarn" class="warn" hidden>Este navegador nao tem Web Bluetooth. Abra esta pagina no app <b>Bluefy</b> (App Store, gratis).</div>div>
-  <div class="row">
-    <button id="btnConnect" class="primary">1. Conectar ao Vgate</button>button>
-    <button id="btnScan" disabled>2. Escanear tudo</button>
-    <button id="btnMonitor" disabled>3. Monitorar ao vivo</button>button>
-    <button id="btnCopy">Copiar log</button>button>
-    <button id="btnSave">Baixar log</button>button>
-  </div>div>
-  <div id="status">desconectado</div>div>
-  <div id="live">
-    <div class="card"><div class="k">Velocidade</div>div><div class="v" id="vSpeed">--</div>div></div>div>
-    <div class="card"><div class="k">Bateria (SOC)</div>div><div class="v" id="vSoc">--</div>div></div>div>
-    <div class="card"><div class="k">Tensao 12V</div>div><div class="v" id="vVolt">--</div>div></div>div>
-    <div class="card"><div class="k">Supabase</div>div><div class="v" id="vSb">--</div>div></div>div>
-  </div>div>
-  <pre id="log"></pre>pre>
-  <script type="module">
-  const SUPABASE_URL = 'https://awdxkyymnltiwhxzcsfa.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_cIsDs9WCjbD0Opm511kDqw_XKSX7CJw';
-  const CHANNEL = 'vehicle:aion-ut';
-  const EVENT = 'telemetry';
-  
-  const $ = (id) => document.getElementById(id);
-  const logEl = $('log');
-  const lines = [];
-  function log(msg) {
-      const t = new Date().toISOString().slice(11, 23);
-      lines.push(t + '  ' + msg);
-      logEl.textContent = lines.slice(-400).join('\n');
-      logEl.scrollTop = logEl.scrollHeight;
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Encorpei Auto - Descoberta Vgate</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0b0f14; color: #dfe7ef; font-family: -apple-system, system-ui, sans-serif; padding: 16px; }
+  h1 { font-size: 16px; letter-spacing: 2px; margin-bottom: 4px; }
+  h1 span { color: #38e0c0; }
+  .sub { color: #7a8794; font-size: 12px; margin-bottom: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  button { background: #16202b; color: #dfe7ef; border: 1px solid #2a3744; border-radius: 10px; padding: 12px 14px; font-size: 14px; flex: 1 1 40%; }
+  button.primary { background: #38e0c0; color: #06231d; font-weight: 700; border: none; }
+  button:disabled { opacity: .35; }
+  #status { font-size: 13px; padding: 8px 12px; border-radius: 8px; background: #131b24; margin-bottom: 10px; }
+  #status.ok { color: #38e0c0; }
+  #status.err { color: #ff7a7a; }
+  #live { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .card { background: #131b24; border-radius: 10px; padding: 10px; }
+  .card .k { color: #7a8794; font-size: 11px; text-transform: uppercase; }
+  .card .v { font-size: 20px; font-weight: 700; }
+  #log { background: #0e141b; border: 1px solid #1c2733; border-radius: 10px; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; height: 45vh; overflow-y: auto; }
+  .warn { background: #2b1d10; color: #ffbf69; padding: 10px; border-radius: 10px; font-size: 13px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<h1>ENCORPEI <span>AUTO</span> - MODO DESCOBERTA</h1>
+<div class="sub">Vgate iCar Pro BLE 4.0 + GAC Aion UT</div>
+<div id="bleWarn" class="warn" hidden>Este navegador nao tem Web Bluetooth. Abra esta pagina no app <b>Bluefy</b> (App Store, gratis).</div>
+<div class="row">
+  <button id="btnConnect" class="primary">1. Conectar ao Vgate</button>
+  <button id="btnScan" disabled>2. Escanear tudo</button>
+  <button id="btnMonitor" disabled>3. Monitorar ao vivo</button>
+  <button id="btnCopy">Copiar log</button>
+  <button id="btnSave">Baixar log</button>
+</div>
+<div id="status">desconectado</div>
+<div id="live">
+  <div class="card"><div class="k">Velocidade</div><div class="v" id="vSpeed">--</div></div>
+  <div class="card"><div class="k">Bateria (SOC)</div><div class="v" id="vSoc">--</div></div>
+  <div class="card"><div class="k">Tensao 12V</div><div class="v" id="vVolt">--</div></div>
+  <div class="card"><div class="k">Supabase</div><div class="v" id="vSb">--</div></div>
+</div>
+<pre id="log"></pre>
+<script type="module">
+const SUPABASE_URL = 'https://awdxkyymnltiwhxzcsfa.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_cIsDs9WCjbD0Opm511kDqw_XKSX7CJw';
+const CHANNEL = 'vehicle:aion-ut';
+const EVENT = 'telemetry';
+
+const $ = (id) => document.getElementById(id);
+const logEl = $('log');
+const lines = [];
+function log(msg) {
+  const t = new Date().toISOString().slice(11, 23);
+  lines.push(t + '  ' + msg);
+  logEl.textContent = lines.slice(-400).join('\n');
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function setStatus(msg, cls) { $('status').textContent = msg; $('status').className = cls || ''; }
+
+// ---------- Supabase (opcional; falha nao bloqueia o scan) ----------
+let chan = null;
+try {
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+  chan = sb.channel(CHANNEL);
+  chan.subscribe((s) => { $('vSb').textContent = s === 'SUBSCRIBED' ? 'ON' : s; });
+} catch (e) { $('vSb').textContent = 'OFF'; log('Supabase indisponivel: ' + e.message); }
+function broadcast(payload) {
+  if (!chan) return;
+  try { chan.send({ type: 'broadcast', event: EVENT, payload }); } catch (e) {}
+}
+
+// ---------- BLE / ELM327 ----------
+const OPTIONAL_SERVICES = [0xfff0, 0xffe0, 0xffe5, 0xff00, 0x18f0,
+  'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
+let device = null, writeChar = null, notifyChar = null;
+let rxBuf = '', pending = null;
+
+if (!navigator.bluetooth) { $('bleWarn').hidden = false; }
+
+function onChunk(ev) {
+  const chunk = new TextDecoder().decode(ev.target.value);
+  rxBuf += chunk;
+  if (rxBuf.includes('>')) {
+    const resp = rxBuf.replace(/>/g, '').trim();
+    rxBuf = '';
+    if (pending) { const p = pending; pending = null; clearTimeout(p.timer); p.resolve(resp); }
   }
-  function setStatus(msg, cls) { $('status').textContent = msg; $('status').className = cls || ''; }
-  
-  // ---------- Supabase (opcional; falha nao bloqueia o scan) ----------
-  let chan = null;
+}
+
+function sendCmd(cmd, timeoutMs = 6000) {
+  return new Promise(async (resolve) => {
+    rxBuf = '';
+    pending = { resolve, timer: setTimeout(() => { pending = null; resolve('(timeout)'); }, timeoutMs) };
+    const data = new TextEncoder().encode(cmd + '\r');
+    try {
+      if (writeChar.properties.writeWithoutResponse) await writeChar.writeValueWithoutResponse(data);
+      else await writeChar.writeValue(data);
+    } catch (e) { if (pending) { clearTimeout(pending.timer); pending = null; } resolve('(erro escrita: ' + e.message + ')'); }
+  });
+}
+
+async function cmd(c, quiet) {
+  const r = await sendCmd(c);
+  if (!quiet) log('> ' + c + '\n  ' + r.replace(/\r/g, '\n  '));
+  return r;
+}
+
+async function connect() {
   try {
-      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-      const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
-      chan = sb.channel(CHANNEL);
-      chan.subscribe((s) => { $('vSb').textContent = s === 'SUBSCRIBED' ? 'ON' : s; });
-  } catch (e) { $('vSb').textContent = 'OFF'; log('Supabase indisponivel: ' + e.message); }
-    function broadcast(payload) {
-        if (!chan) return;
-            try { chan.send({ type: 'broadcast', event: EVENT, payload }); } catch (e) {}
-    }
-  
-  // ---------- BLE / ELM327 ----------
-  const OPTIONAL_SERVICES = [0xfff0, 0xffe0, 0xffe5, 0xff00, 0x18f0,
-                               'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
-  let device = null, writeChar = null, notifyChar = null;
-  let rxBuf = '', pending = null;
-  
-  if (!navigator.bluetooth) { $('bleWarn').hidden = false; }
-    
-    function onChunk(ev) {
-        const chunk = new TextDecoder().decode(ev.target.value);
-        rxBuf += chunk;
-        if (rxBuf.includes('>')) {
-              const resp = rxBuf.replace(/>/g, '').trim();
-              rxBuf = '';
-              if (pending) { const p = pending; pending = null; clearTimeout(p.timer); p.resolve(resp); }
-        }
-    }
-  
-      function sendCmd(cmd, timeoutMs = 6000) {
-          return new Promise(async (resolve) => {
-                rxBuf = '';
-                pending = { resolve, timer: setTimeout(() => { pending = null; resolve('(timeout)'); }, timeoutMs) };
-                const data = new TextEncoder().encode(cmd + '\r');
-                try {
-                        if (writeChar.properties.writeWithoutResponse) await writeChar.writeValueWithoutResponse(data);
-                                else await writeChar.writeValue(data);
-                } catch (e) { if (pending) { clearTimeout(pending.timer); pending = null; } resolve('(erro escrita: ' + e.message + ')'); }
-          });
+    setStatus('abrindo seletor Bluetooth...');
+    device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: OPTIONAL_SERVICES });
+    setStatus('conectando a ' + (device.name || 'dispositivo') + '...');
+    const server = await device.gatt.connect();
+    const services = await server.getPrimaryServices();
+    for (const s of services) {
+      log('servico ' + s.uuid);
+      const chars = await s.getCharacteristics();
+      for (const c of chars) {
+        log('  char ' + c.uuid + ' [' + Object.keys(c.properties).filter(k => c.properties[k]).join(',') + ']');
+        if (c.properties.notify && !notifyChar) notifyChar = c;
+        if ((c.properties.write || c.properties.writeWithoutResponse) && !writeChar) writeChar = c;
       }
-  
-  async function cmd(c, quiet) {
-      const r = await sendCmd(c);
-      if (!quiet) log('> ' + c + '\n  ' + r.replace(/\r/g, '\n  '));
-          return r;
-  }
-  
-  async function connect() {
-      try {
-            setStatus('abrindo seletor Bluetooth...');
-            device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: OPTIONAL_SERVICES });
-            setStatus('conectando a ' + (device.name || 'dispositivo') + '...');
-            const server = await device.gatt.connect();
-            const services = await server.getPrimaryServices();
-            for (const s of services) {
-                    log('servico ' + s.uuid);
-                    const chars = await s.getCharacteristics();
-                    for (const c of chars) {
-                              log('  char ' + c.uuid + ' [' + Object.keys(c.properties).filter(k => c.properties[k]).join(',') + ']');
-                              if (c.properties.notify && !notifyChar) notifyChar = c;
-                                        if ((c.properties.write || c.properties.writeWithoutResponse) && !writeChar) writeChar = c;
-                    }
-            }
-            if (!writeChar || !notifyChar) { setStatus('caracteristicas BLE nao encontradas', 'err'); return; }
-                  await notifyChar.startNotifications();
-            notifyChar.addEventListener('characteristicvaluechanged', onChunk);
-            setStatus('conectado a ' + (device.name || '?') + ' - inicializando ELM...', 'ok');
-            await cmd('ATZ'); await new Promise(r => setTimeout(r, 1000));
-            await cmd('ATE0'); await cmd('ATL0'); await cmd('ATS1'); await cmd('ATH1'); await cmd('ATSP0');
-            const rv = await cmd('ATRV');
-            const m = rv.match(/([\d.]+)V/); if (m) $('vVolt').textContent = m[1] + ' V';
-                  setStatus('ELM pronto. Ligue o carro (ready) e toque em Escanear.', 'ok');
-            $('btnScan').disabled = false; $('btnMonitor').disabled = false;
-            device.addEventListener('gattserverdisconnected', () => setStatus('desconectado', 'err'));
-      } catch (e) { setStatus('falhou: ' + e.message, 'err'); log('ERRO conexao: ' + e.message); }
-  }
-  
-  const PID_NAMES = { '04':'carga motor %','05':'temp arrefecimento','0B':'pressao coletor','0C':'RPM','0D':'velocidade km/h','0F':'temp admissao','11':'acelerador %','1F':'tempo ligado s','21':'dist com falha km','2F':'nivel combustivel %','33':'pressao barometrica','42':'tensao modulo V','46':'temp ambiente','5B':'SOC bateria tracao %','5C':'temp oleo','A6':'odometro km' };
-  
-  function bytesAfter(resp, marker) {
-      const clean = resp.replace(/\r/g, ' ').replace(/\s+/g, ' ');
-      const i = clean.indexOf(marker);
-      if (i < 0) return null;
-          return clean.slice(i + marker.length).trim().split(' ').map(h => parseInt(h, 16)).filter(n => !isNaN(n));
-  }
-  
-  async function supportedPids() {
-      const found = [];
-      for (const base of ['00', '20', '40', '60', '80', 'A0']) {
-            const r = await cmd('01' + base);
-            const b = bytesAfter(r, '41 ' + base);
-            if (!b || b.length < 4) { if (base === '00') log('sem resposta 0100 - carro ligado?'); break; }
-                  const mask = (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3];
-            let more = false;
-            for (let i = 0; i < 32; i++) {
-                    if (mask & (1 << (31 - i))) {
-                              const pid = (parseInt(base, 16) + i + 1).toString(16).toUpperCase().padStart(2, '0');
-                              if ((i + 1) % 32 === 0) { more = true; continue; }
-                                        found.push(pid);
-                            }
-            }
-            if (!more) break;
+    }
+    if (!writeChar || !notifyChar) { setStatus('caracteristicas BLE nao encontradas', 'err'); return; }
+    await notifyChar.startNotifications();
+    notifyChar.addEventListener('characteristicvaluechanged', onChunk);
+    setStatus('conectado a ' + (device.name || '?') + ' - inicializando ELM...', 'ok');
+    await cmd('ATZ'); await new Promise(r => setTimeout(r, 1000));
+    await cmd('ATE0'); await cmd('ATL0'); await cmd('ATS1'); await cmd('ATH1'); await cmd('ATSP0');
+    const rv = await cmd('ATRV');
+    const m = rv.match(/([\d.]+)V/); if (m) $('vVolt').textContent = m[1] + ' V';
+    setStatus('ELM pronto. Ligue o carro (ready) e toque em Escanear.', 'ok');
+    $('btnScan').disabled = false; $('btnMonitor').disabled = false;
+    device.addEventListener('gattserverdisconnected', () => setStatus('desconectado', 'err'));
+  } catch (e) { setStatus('falhou: ' + e.message, 'err'); log('ERRO conexao: ' + e.message); }
+}
+
+const PID_NAMES = { '04':'carga motor %','05':'temp arrefecimento','0B':'pressao coletor','0C':'RPM','0D':'velocidade km/h','0F':'temp admissao','11':'acelerador %','1F':'tempo ligado s','21':'dist com falha km','2F':'nivel combustivel %','33':'pressao barometrica','42':'tensao modulo V','46':'temp ambiente','5B':'SOC bateria tracao %','5C':'temp oleo','A6':'odometro km' };
+
+function bytesAfter(resp, marker) {
+  const clean = resp.replace(/\r/g, ' ').replace(/\s+/g, ' ');
+  const i = clean.indexOf(marker);
+  if (i < 0) return null;
+  return clean.slice(i + marker.length).trim().split(' ').map(h => parseInt(h, 16)).filter(n => !isNaN(n));
+}
+
+async function supportedPids() {
+  const found = [];
+  for (const base of ['00', '20', '40', '60', '80', 'A0']) {
+    const r = await cmd('01' + base);
+    const b = bytesAfter(r, '41 ' + base);
+    if (!b || b.length < 4) { if (base === '00') log('sem resposta 0100 - carro ligado?'); break; }
+    const mask = (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3];
+    let more = false;
+    for (let i = 0; i < 32; i++) {
+      if (mask & (1 << (31 - i))) {
+        const pid = (parseInt(base, 16) + i + 1).toString(16).toUpperCase().padStart(2, '0');
+        if ((i + 1) % 32 === 0) { more = true; continue; }
+        found.push(pid);
       }
-      return found;
+    }
+    if (!more) break;
   }
-  
-  async function scanAll() {
-      $('btnScan').disabled = true;
-      try {
-            log('===== INICIO DO SCAN =====');
-            await cmd('ATI'); await cmd('ATDP');
-            log('--- PIDs suportados (modo 01) ---');
-            const pids = await supportedPids();
-            log('suportados: ' + (pids.join(' ') || 'nenhum'));
-            for (const p of pids) {
-                    const r = await cmd('01' + p, true);
-                    log('01' + p + (PID_NAMES[p] ? ' (' + PID_NAMES[p] + ')' : '') + ' -> ' + r.replace(/\r/g, ' | '));
-            }
-            log('--- VIN e info (modo 09) ---');
-            await cmd('0900'); await cmd('0902'); await cmd('090A');
-            log('--- Falhas (modo 03) ---');
-            await cmd('03');
-            log('===== FIM DO SCAN ===== Toque em Copiar log e me envie tudo.');
-            setStatus('scan completo - copie o log', 'ok');
-      } catch (e) { log('ERRO no scan: ' + e.message); }
-          $('btnScan').disabled = false;
-  }
-  
-  let monTimer = null;
-  async function monitorTick() {
-      const out = { timestamp: Date.now() };
-      const rs = await sendCmd('010D'); let b = bytesAfter(rs, '41 0D');
-      if (b && b.length) { out.speedKmh = b[0]; $('vSpeed').textContent = b[0] + ' km/h'; }
-          const rb = await sendCmd('015B'); b = bytesAfter(rb, '41 5B');
-      if (b && b.length) { out.soc = Math.round(b[0] * 1000 / 255) / 10; $('vSoc').textContent = out.soc + ' %'; }
-          const rv = await sendCmd('0142'); b = bytesAfter(rv, '41 42');
-      if (b && b.length >= 2) { out.voltage = ((b[0] << 8) + b[1]) / 1000; }
-          const ro = await sendCmd('01A6'); b = bytesAfter(ro, '41 A6');
-      if (b && b.length >= 4) { out.odometerKm = ((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]) / 10; }
-          broadcast(out);
-  }
-  function toggleMonitor() {
-      if (monTimer) { clearInterval(monTimer); monTimer = null; $('btnMonitor').textContent = '3. Monitorar ao vivo'; setStatus('monitor parado', 'ok'); return; }
-          $('btnMonitor').textContent = 'Parar monitor';
-      setStatus('monitorando e publicando no dashboard...', 'ok');
-      monTimer = setInterval(monitorTick, 1500);
-  }
-  
-  $('btnConnect').onclick = connect;
-  $('btnScan').onclick = scanAll;
-  $('btnMonitor').onclick = toggleMonitor;
-  $('btnCopy').onclick = async () => {
-      try { await navigator.clipboard.writeText(lines.join('\n')); setStatus('log copiado (' + lines.length + ' linhas)', 'ok'); }
-      catch (e) { setStatus('copiar falhou - use Baixar log', 'err'); }
-  };
-  $('btnSave').onclick = () => {
-      const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'vgate-scan-' + Date.now() + '.txt';
-      a.click();
-  };
-  log('Pronto. Plugue o Vgate no OBD, ligue o carro e toque em Conectar.');
-  </script>
-  </body>
+  return found;
+}
+
+async function scanAll() {
+  $('btnScan').disabled = true;
+  try {
+    log('===== INICIO DO SCAN =====');
+    await cmd('ATI'); await cmd('ATDP');
+    log('--- PIDs suportados (modo 01) ---');
+    const pids = await supportedPids();
+    log('suportados: ' + (pids.join(' ') || 'nenhum'));
+    for (const p of pids) {
+      const r = await cmd('01' + p, true);
+      log('01' + p + (PID_NAMES[p] ? ' (' + PID_NAMES[p] + ')' : '') + ' -> ' + r.replace(/\r/g, ' | '));
+    }
+    log('--- VIN e info (modo 09) ---');
+    await cmd('0900'); await cmd('0902'); await cmd('090A');
+    log('--- Falhas (modo 03) ---');
+    await cmd('03');
+    log('===== FIM DO SCAN ===== Toque em Copiar log e me envie tudo.');
+    setStatus('scan completo - copie o log', 'ok');
+  } catch (e) { log('ERRO no scan: ' + e.message); }
+  $('btnScan').disabled = false;
+}
+
+let monTimer = null;
+async function monitorTick() {
+  const out = { timestamp: Date.now() };
+  const rs = await sendCmd('010D'); let b = bytesAfter(rs, '41 0D');
+  if (b && b.length) { out.speedKmh = b[0]; $('vSpeed').textContent = b[0] + ' km/h'; }
+  const rb = await sendCmd('015B'); b = bytesAfter(rb, '41 5B');
+  if (b && b.length) { out.soc = Math.round(b[0] * 1000 / 255) / 10; $('vSoc').textContent = out.soc + ' %'; }
+  const rv = await sendCmd('0142'); b = bytesAfter(rv, '41 42');
+  if (b && b.length >= 2) { out.voltage = ((b[0] << 8) + b[1]) / 1000; }
+  const ro = await sendCmd('01A6'); b = bytesAfter(ro, '41 A6');
+  if (b && b.length >= 4) { out.odometerKm = ((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]) / 10; }
+  broadcast(out);
+}
+function toggleMonitor() {
+  if (monTimer) { clearInterval(monTimer); monTimer = null; $('btnMonitor').textContent = '3. Monitorar ao vivo'; setStatus('monitor parado', 'ok'); return; }
+  $('btnMonitor').textContent = 'Parar monitor';
+  setStatus('monitorando e publicando no dashboard...', 'ok');
+  monTimer = setInterval(monitorTick, 1500);
+}
+
+$('btnConnect').onclick = connect;
+$('btnScan').onclick = scanAll;
+$('btnMonitor').onclick = toggleMonitor;
+$('btnCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText(lines.join('\n')); setStatus('log copiado (' + lines.length + ' linhas)', 'ok'); }
+  catch (e) { setStatus('copiar falhou - use Baixar log', 'err'); }
+};
+$('btnSave').onclick = () => {
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'vgate-scan-' + Date.now() + '.txt';
+  a.click();
+};
+log('Pronto. Plugue o Vgate no OBD, ligue o carro e toque em Conectar.');
+</script>
+</body>
 </html>
