@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import { useVehicleStore } from './stores/vehicleStore';
 import { PowerGauge } from './components/dashboard/PowerGauge';
-import { BatteryCard, ConnectionBadge, StatGrid, TripBar, TripHistory } from './components/dashboard/Cards';
+import { BatteryCard, CellHealthCard, ConnectionBadge, StatGrid, TripBar, TripHistory } from './components/dashboard/Cards';
 
 export default function App() {
   const connect = useVehicleStore((s) => s.connect);
 
-    // Conecta automaticamente ao abrir (fonte: Vehicle Gateway via Supabase Realtime)
+  // Conecta automaticamente ao abrir (fonte: Vehicle Gateway via Supabase Realtime)
   useEffect(() => {
     connect();
   }, [connect]);
@@ -23,12 +23,13 @@ export default function App() {
 
       <PowerGauge />
       <BatteryCard />
+      <CellHealthCard />
       <TripBar />
       <StatGrid />
       <TripHistory />
 
       <footer className="app-footer">
-                Telemetria via Vehicle Gateway · GAC Aion UT + Vgate iCar Pro · ?source=mock para simulação
+        Telemetria via Vehicle Gateway · GAC Aion UT + Vgate iCar Pro · ?source=mock para simulação
       </footer>
     </main>
   );
