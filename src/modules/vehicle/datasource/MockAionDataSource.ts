@@ -91,6 +91,10 @@ export class MockAionDataSource extends BaseDataSource {
       driveMode: 'normal',
       gear: this.speed > 0.5 ? 'D' : 'P',
       soh: 98.6,
+      cellVoltageMin: round(voltage / 96 - 0.006 + noise(0.002), 3),
+      cellVoltageMax: round(voltage / 96 + 0.006 + noise(0.002), 3),
+      battTempMin: round(this.batteryTemp - 1.1, 1),
+      battTempMax: round(this.batteryTemp + 1.4, 1),
     };
 
     this.emitData(data);
