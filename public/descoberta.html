@@ -62,6 +62,7 @@ function log(msg) {
 }
 function setStatus(msg, cls) { $('status').textContent = msg; $('status').className = cls || ''; }
 
+// ---------- Supabase (opcional; falha nao bloqueia o scan) ----------
 let chan = null;
 try {
   const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
@@ -74,8 +75,16 @@ function broadcast(payload) {
   try { chan.send({ type: 'broadcast', event: EVENT, payload }); } catch (e) {}
 }
 
-const OPTIONAL_SERVICES = [0xfff0, 0xffe0, 0xffe5, 0xff00, 0x18f0,
-  'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
+// ---------- BLE / ELM327 ----------
+// UUIDs em formato LONGO (texto) — o Bluefy nao aceita 0xfff0 numerico.
+const OPTIONAL_SERVICES = [
+  '0000fff0-0000-1000-8000-00805f9b34fb',
+  '0000ffe0-0000-1000-8000-00805f9b34fb',
+  '0000ffe5-0000-1000-8000-00805f9b34fb',
+  '0000ff00-0000-1000-8000-00805f9b34fb',
+  '000018f0-0000-1000-8000-00805f9b34fb',
+  'e7810a71-73ae-499d-8c15-faa9aef0c3f2'
+];
 let device = null, writeChar = null, notifyChar = null;
 let rxBuf = '', pending = null;
 
@@ -109,10 +118,60 @@ async function cmd(c, quiet) {
   return r;
 }
 
+function errStr(e) {
+  if (e === undefined) return 'erro sem objeto (undefined) - requestDevice rejeitou sem detalhe';
+  if (e === null) return 'erro nulo';
+  if (typeof e === 'string') return e;
+  const parts = [];
+  if (e.name) parts.push('name=' + e.name);
+  if (e.code !== undefined) parts.push('code=' + e.code);
+  if (e.message) parts.push('msg=' + e.message);
+  if (parts.length === 0) { try { parts.push(JSON.stringify(e)); } catch (_) { parts.push(String(e)); } }
+  return parts.join(' ');
+}
+
+async function diagBluetooth() {
+  log('--- diagnostico Bluetooth ---');
+  log('navigator.bluetooth existe? ' + (!!navigator.bluetooth));
+  if (!navigator.bluetooth) { log('ESTE NAVEGADOR NAO TEM WEB BLUETOOTH. Use o app Bluefy.'); return false; }
+  try {
+    if (navigator.bluetooth.getAvailability) {
+      const av = await navigator.bluetooth.getAvailability();
+      log('getAvailability (Bluetooth disponivel no aparelho?): ' + av);
+    } else { log('getAvailability nao suportado neste navegador'); }
+  } catch (e) { log('getAvailability erro: ' + errStr(e)); }
+  return true;
+}
+
 async function connect() {
   try {
-    setStatus('abrindo seletor Bluetooth...');
-    device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: OPTIONAL_SERVICES });
+    const ok = await diagBluetooth();
+    if (!ok) { setStatus('navegador sem Web Bluetooth - use Bluefy', 'err'); return; }
+    setStatus('abrindo seletor Bluetooth... (escolha o dongle na lista)');
+    log('chamando requestDevice com acceptAllDevices...');
+    let dev;
+    try {
+      dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: OPTIONAL_SERVICES });
+    } catch (e1) {
+      log('requestDevice(acceptAllDevices) falhou: ' + errStr(e1));
+      log('tentando de novo com filtros de nome (OBD/Vgate/iCar/Vlink)...');
+      try {
+        dev = await navigator.bluetooth.requestDevice({
+          filters: [
+            { namePrefix: 'OBD' }, { namePrefix: 'IOS-Vlink' }, { namePrefix: 'Vlink' },
+            { namePrefix: 'V-LINK' }, { namePrefix: 'Vgate' }, { namePrefix: 'iCar' },
+            { namePrefix: 'VEEPEAK' }, { namePrefix: 'ELM' }, { namePrefix: 'OBDII' }
+          ],
+          optionalServices: OPTIONAL_SERVICES
+        });
+      } catch (e2) {
+        log('requestDevice(filtros) tambem falhou: ' + errStr(e2));
+        setStatus('nao foi possivel abrir/escolher dispositivo - veja o log', 'err');
+        return;
+      }
+    }
+    device = dev;
+    log('dispositivo escolhido: nome=' + (device.name || '(sem nome)') + ' id=' + (device.id || '?'));
     setStatus('conectando a ' + (device.name || 'dispositivo') + '...');
     const server = await device.gatt.connect();
     const services = await server.getPrimaryServices();
@@ -136,7 +195,7 @@ async function connect() {
     setStatus('ELM pronto. Ligue o carro (ready) e toque em Escanear.', 'ok');
     $('btnScan').disabled = false; $('btnMonitor').disabled = false; $('btnProbe').disabled = false;
     device.addEventListener('gattserverdisconnected', () => setStatus('desconectado', 'err'));
-  } catch (e) { setStatus('falhou: ' + e.message, 'err'); log('ERRO conexao: ' + e.message); }
+  } catch (e) { setStatus('falhou: ' + errStr(e), 'err'); log('ERRO conexao: ' + errStr(e)); }
 }
 
 const PID_NAMES = { '04':'carga motor %','05':'temp arrefecimento','0B':'pressao coletor','0C':'RPM','0D':'velocidade km/h','0F':'temp admissao','11':'acelerador %','1F':'tempo ligado s','21':'dist com falha km','2F':'nivel combustivel %','33':'pressao barometrica','42':'tensao modulo V','46':'temp ambiente','5B':'SOC bateria tracao %','5C':'temp oleo','A6':'odometro km' };
