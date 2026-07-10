@@ -33,6 +33,7 @@
   <button id="btnConnect" class="primary">1. Conectar ao Vgate</button>
   <button id="btnScan" disabled>2. Escanear tudo</button>
   <button id="btnMonitor" disabled>3. Monitorar ao vivo</button>
+  <button id="btnProbe" disabled>4. Sondar BMS</button>
   <button id="btnCopy">Copiar log</button>
   <button id="btnSave">Baixar log</button>
 </div>
@@ -61,7 +62,6 @@ function log(msg) {
 }
 function setStatus(msg, cls) { $('status').textContent = msg; $('status').className = cls || ''; }
 
-// ---------- Supabase (opcional; falha nao bloqueia o scan) ----------
 let chan = null;
 try {
   const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
@@ -74,7 +74,6 @@ function broadcast(payload) {
   try { chan.send({ type: 'broadcast', event: EVENT, payload }); } catch (e) {}
 }
 
-// ---------- BLE / ELM327 ----------
 const OPTIONAL_SERVICES = [0xfff0, 0xffe0, 0xffe5, 0xff00, 0x18f0,
   'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
 let device = null, writeChar = null, notifyChar = null;
@@ -135,7 +134,7 @@ async function connect() {
     const rv = await cmd('ATRV');
     const m = rv.match(/([\d.]+)V/); if (m) $('vVolt').textContent = m[1] + ' V';
     setStatus('ELM pronto. Ligue o carro (ready) e toque em Escanear.', 'ok');
-    $('btnScan').disabled = false; $('btnMonitor').disabled = false;
+    $('btnScan').disabled = false; $('btnMonitor').disabled = false; $('btnProbe').disabled = false;
     device.addEventListener('gattserverdisconnected', () => setStatus('desconectado', 'err'));
   } catch (e) { setStatus('falhou: ' + e.message, 'err'); log('ERRO conexao: ' + e.message); }
 }
@@ -191,6 +190,36 @@ async function scanAll() {
   $('btnScan').disabled = false;
 }
 
+async function probeBms() {
+  $('btnProbe').disabled = true;
+  try {
+    log('===== SONDA BMS (UDS modo 22) =====');
+    await sendCmd('ATST32');
+    const headers = ['7DF', '7E4', '7E5', '7E6', '7E7'];
+    const dids = ['F190', 'F187', 'F18C', 'E101'];
+    for (let d = 0x0100; d <= 0x010F; d++) dids.push(d.toString(16).toUpperCase().padStart(4, '0'));
+    for (let d = 0xD001; d <= 0xD010; d++) dids.push(d.toString(16).toUpperCase());
+    for (let d = 0xB001; d <= 0xB010; d++) dids.push(d.toString(16).toUpperCase());
+    for (const h of headers) {
+      log('--- header ' + h + ' ---');
+      await sendCmd('ATSH' + h);
+      let hits = 0;
+      for (const d of dids) {
+        const r = await sendCmd('22' + d, 3000);
+        if (r && r.includes('62') && !/NO DATA|ERROR|\?/i.test(r)) {
+          log('22' + d + ' -> ' + r.replace(/\r/g, ' | '));
+          hits++;
+        }
+      }
+      log('header ' + h + ': ' + hits + ' respostas positivas');
+    }
+    await sendCmd('ATSH7DF');
+    log('===== FIM DA SONDA ===== Copie o log e me envie.');
+    setStatus('sonda BMS completa - copie o log', 'ok');
+  } catch (e) { log('ERRO na sonda: ' + e.message); }
+  $('btnProbe').disabled = false;
+}
+
 let monTimer = null;
 async function monitorTick() {
   const out = { timestamp: Date.now() };
@@ -214,6 +243,7 @@ function toggleMonitor() {
 $('btnConnect').onclick = connect;
 $('btnScan').onclick = scanAll;
 $('btnMonitor').onclick = toggleMonitor;
+$('btnProbe').onclick = probeBms;
 $('btnCopy').onclick = async () => {
   try { await navigator.clipboard.writeText(lines.join('\n')); setStatus('log copiado (' + lines.length + ' linhas)', 'ok'); }
   catch (e) { setStatus('copiar falhou - use Baixar log', 'err'); }
