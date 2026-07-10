@@ -3,6 +3,7 @@ import type { ConnectionStatus, VehicleData } from '../modules/vehicle/types';
 import { EMPTY_VEHICLE_DATA } from '../modules/vehicle/types';
 import type { VehicleDataSource } from '../modules/vehicle/datasource/VehicleDataSource';
 import { MockAionDataSource } from '../modules/vehicle/datasource/MockAionDataSource';
+import { SupabaseRealtimeSource } from '../modules/vehicle/datasource/SupabaseRealtimeSource';
 import { TripEngine, loadTrips, type TripRecord, type TripState } from '../modules/trip/TripEngine';
 
 /**
@@ -12,7 +13,11 @@ import { TripEngine, loadTrips, type TripRecord, type TripState } from '../modul
  */
 
 function createSource(): VehicleDataSource {
-  return new MockAionDataSource();
+    // Fonte real: Vehicle Gateway publica no Supabase Realtime.
+    // Para demonstracao sem carro, abra o app com ?source=mock
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('source') === 'mock') return new MockAionDataSource();
+    return new SupabaseRealtimeSource();
 }
 
 interface VehicleStore {
