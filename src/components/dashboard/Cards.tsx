@@ -88,6 +88,30 @@ export function StatGrid() {
   );
 }
 
+export function CellHealthCard() {
+  const d = useVehicleStore((s) => s.data);
+  const min = d.cellVoltageMin;
+  const max = d.cellVoltageMax;
+  const deltaMv = min !== null && max !== null ? Math.round((max - min) * 1000) : null;
+  const unbalanced = deltaMv !== null && deltaMv > 50;
+  return (
+    <section className="card" aria-label="Saúde da bateria">
+      <header className="card-head">
+        <span className="card-label">Saúde da bateria</span>
+        <span className="card-aux">{deltaMv !== null ? (unbalanced ? 'desbalanceada' : 'células OK') : 'aguardando BMS'}</span>
+      </header>
+      <div className="stat-grid">
+        <Stat label="Célula mín" value={min !== null ? min.toFixed(3) : '—'} unit="V" />
+        <Stat label="Célula máx" value={max !== null ? max.toFixed(3) : '—'} unit="V" />
+        <Stat label="Delta" value={deltaMv !== null ? String(deltaMv) : '—'} unit="mV" />
+        <Stat label="SOH" value={d.soh !== null ? d.soh.toFixed(1) : '—'} unit="%" />
+        <Stat label="Pack mín" value={d.battTempMin !== null ? d.battTempMin.toFixed(0) : '—'} unit="°C" />
+        <Stat label="Pack máx" value={d.battTempMax !== null ? d.battTempMax.toFixed(0) : '—'} unit="°C" />
+      </div>
+    </section>
+  );
+}
+
 export function TripBar() {
   const tripState = useVehicleStore((s) => s.tripState);
   const trip = useVehicleStore((s) => s.currentTrip);
