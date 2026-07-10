@@ -25,6 +25,10 @@ export interface VehicleData {
   driveMode: DriveMode;
   gear: Gear;
   soh: number | null;         // % saúde da bateria (State of Health)
+  cellVoltageMin: number | null; // V da célula mais fraca
+  cellVoltageMax: number | null; // V da célula mais forte
+  battTempMin: number | null;    // °C do módulo mais frio
+  battTempMax: number | null;    // °C do módulo mais quente
 }
 
 export type ConnectionState =
@@ -61,4 +65,8 @@ export const EMPTY_VEHICLE_DATA: VehicleData = {
   driveMode: 'unknown',
   gear: 'unknown',
   soh: null,
+  cellVoltageMin: null,
+  cellVoltageMax: null,
+  battTempMin: null,
+  battTempMax: null,
 };
