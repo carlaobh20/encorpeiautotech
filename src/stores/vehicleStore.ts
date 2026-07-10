@@ -37,6 +37,26 @@ interface VehicleStore {
 const source = createSource();
 const tripEngine = new TripEngine();
 
+// --- Captura de GPS do proprio aparelho (independente do Vgate) ---
+let geoWatchId: number | null = null;
+function startGeo(onPoint: () => void) {
+  if (!('geolocation' in navigator)) return;
+  stopGeo();
+  try {
+    geoWatchId = navigator.geolocation.watchPosition(
+      (pos) => { tripEngine.addGeo(pos.coords.latitude, pos.coords.longitude); onPoint(); },
+      () => { /* permissao negada / sem sinal: viagem segue sem mapa */ },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 12000 }
+    );
+  } catch { /* ignore */ }
+}
+function stopGeo() {
+  if (geoWatchId !== null && 'geolocation' in navigator) {
+    navigator.geolocation.clearWatch(geoWatchId);
+    geoWatchId = null;
+  }
+}
+
 export const useVehicleStore = create<VehicleStore>((set, get) => {
   source.onData((data) => {
     tripEngine.ingest(data);
@@ -61,6 +81,7 @@ export const useVehicleStore = create<VehicleStore>((set, get) => {
     startTrip: () => {
       tripEngine.start(get().data);
       set({ tripState: 'running', currentTrip: { ...tripEngine.current! } });
+      startGeo(() => set({ currentTrip: tripEngine.current ? { ...tripEngine.current } : null }));
     },
     pauseTrip: () => {
       tripEngine.pause();
@@ -71,6 +92,7 @@ export const useVehicleStore = create<VehicleStore>((set, get) => {
       set({ tripState: 'running' });
     },
     finishTrip: () => {
+      stopGeo();
       tripEngine.finish(get().data);
       set({ tripState: 'idle', currentTrip: null, tripHistory: loadTrips() });
     },
