@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useVehicleStore } from './stores/vehicleStore';
 import { PowerGauge } from './components/dashboard/PowerGauge';
+import { TripMap } from './components/dashboard/TripMap';
 import { BatteryCard, CellHealthCard, ConnectionBadge, StatGrid, TripBar, TripHistory } from './components/dashboard/Cards';
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
       <BatteryCard />
       <CellHealthCard />
       <TripBar />
+      <TripMap />
       <StatGrid />
       <TripHistory />
 
