@@ -6,7 +6,7 @@ import { BatteryCard, ConnectionBadge, StatGrid, TripBar, TripHistory } from './
 export default function App() {
   const connect = useVehicleStore((s) => s.connect);
 
-  // Conecta automaticamente ao abrir (fonte atual: simulador Aion UT)
+    // Conecta automaticamente ao abrir (fonte: Vehicle Gateway via Supabase Realtime)
   useEffect(() => {
     connect();
   }, [connect]);
@@ -28,7 +28,7 @@ export default function App() {
       <TripHistory />
 
       <footer className="app-footer">
-        Dados simulados · driver GAC Aion UT aguardando validação de PIDs
+                Telemetria via Vehicle Gateway · GAC Aion UT + Vgate iCar Pro · ?source=mock para simulação
       </footer>
     </main>
   );
