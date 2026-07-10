@@ -6,7 +6,6 @@ import type { GeoPoint } from '../../modules/trip/TripEngine';
 declare global { interface Window { maplibregl: any } }
 
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
-const TERRAIN_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
 
 const geoCache = new Map<string, string>();
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
@@ -69,14 +68,7 @@ export function TripMap() {
       });
       map.addControl(new gl.NavigationControl({ visualizePitch: true }), 'top-right');
       map.on('load', () => {
-        // Relevo 3D (tiles de elevação abertos da AWS)
-        try {
-          map.addSource('terrain', {
-            type: 'raster-dem', tiles: [TERRAIN_TILES], encoding: 'terrarium', tileSize: 256, maxzoom: 14,
-          });
-          map.setTerrain({ source: 'terrain', exaggeration: 1.1 });
-        } catch (_) { /* sem relevo: mapa segue */ }
-        // Prédios em 3D
+        // Prédios em 3D (o efeito 3D vem daqui + inclinação; sem terreno DEM que trava render)
         try {
           map.addLayer({
             id: 'buildings-3d', type: 'fill-extrusion', source: 'openmaptiles',
