@@ -251,26 +251,44 @@ async function scanAll() {
 
 async function probeBms() {
   $('btnProbe').disabled = true;
+  $('btnScan').disabled = true;      // trava outros botoes pra nao colidir
+  $('btnMonitor').disabled = true;
   try {
     log('===== SONDA BMS + DESCOBERTA (UDS 22) =====');
-    await sendCmd('ATST20');   // timeout ELM ~128ms
-    await sendCmd('ATH1');     // headers ON (mostra o CAN ID de cada modulo)
-    await sendCmd('ATS1');     // espacos ON
+    await sendCmd('ATH1'); await sendCmd('ATS1'); await sendCmd('ATSH7DF');
 
-    // (1) DUMP BRUTO no broadcast 7DF — revela o endereco de cada ECU
-    await sendCmd('ATSH7DF');
-    log('--- (1) dump bruto 7DF (procurando o CAN ID do BMS) ---');
-    for (const did of ['220100', '22F190', '22F187', '22F18C', '22F195']) {
-      const r = await sendCmd(did, 1500);
+    // (0) PREPARACAO PACIENTE: deixa o ELM achar o protocolo (SEARCHING pode levar segundos)
+    log('--- (0) preparando (achando protocolo, aguarde) ---');
+    let woke = false;
+    for (let i = 0; i < 5 && !woke; i++) {
+      const r = await sendCmd('220100', 9000);   // timeout longo: permite a busca de protocolo
+      log('preparo ' + (i + 1) + ' -> ' + r.replace(/\r/g, ' | '));
+      if (r && r.includes('62')) { woke = true; }
+      else await new Promise(res => setTimeout(res, 600));
+    }
+    if (!woke) {
+      log('>>> O BUS DO CARRO NAO RESPONDEU. <<<');
+      log('Verifique: o carro esta em READY (painel todo aceso, pe no freio + botao)?');
+      log('Sem o carro em ready, os modulos ficam mudos. Ligue e toque em Sondar de novo.');
+      setStatus('bus mudo - o carro esta em READY?', 'err');
+      return;
+    }
+    log('BUS ATIVO! protocolo estabelecido. Coletando...');
+    await sendCmd('ATST64');   // ~400ms: agora respostas vem rapido
+
+    // (1) dump bruto no 7DF (revela o CAN ID de cada modulo)
+    log('--- (1) dump bruto 7DF ---');
+    for (const did of ['220100', '22F190', '22F187', '22F18C', '22F195', '22F1A0']) {
+      const r = await sendCmd(did, 2500);
       log(did + ' RAW -> ' + r.replace(/\r/g, ' | '));
     }
 
-    // (2) VARREDURA AMPLA de DIDs no 7DF
+    // (2) varredura ampla 220100 a 2201FF
     log('--- (2) varrendo 220100 a 2201FF ---');
     let hits = 0;
     for (let d = 0x0100; d <= 0x01FF; d++) {
       const did = d.toString(16).toUpperCase().padStart(4, '0');
-      const r = await sendCmd('22' + did, 500);
+      const r = await sendCmd('22' + did, 900);
       if (r && /62/.test(r) && !/NO DATA|ERROR|STOPPED|UNABLE|SEARCHING|\?/i.test(r)) {
         log('22' + did + ' -> ' + r.replace(/\r/g, ' | '));
         hits++;
@@ -278,14 +296,14 @@ async function probeBms() {
     }
     log('varredura 0100-01FF: ' + hits + ' positivas');
 
-    // (3) DESCOBERTA DE HEADER FISICO — onde as celulas/temperaturas moram
+    // (3) descoberta de header fisico (onde moram celulas/temperaturas)
     log('--- (3) procurando o modulo BMS por header fisico ---');
     const headers = ['7E0','7E1','7E2','7E3','7E4','7E5','7E6','7E7',
                      '7B3','7A1','706','720','7C0','7C4','7D0','7DA','7E8','7EA'];
     let found = 0;
     for (const h of headers) {
       await sendCmd('ATSH' + h);
-      const r = await sendCmd('220100', 600);
+      const r = await sendCmd('220100', 900);
       if (r && /62 ?01 ?00/i.test(r) && !/NO DATA|ERROR|STOPPED|UNABLE|SEARCHING|\?/i.test(r)) {
         log('HEADER ' + h + ' responde -> ' + r.replace(/\r/g, ' | '));
         found++;
@@ -294,11 +312,14 @@ async function probeBms() {
     log('headers fisicos que responderam: ' + found);
 
     await sendCmd('ATSH7DF');
-    await sendCmd('ATST64');
     log('===== FIM ===== Toque em Copiar log e me envie tudo.');
-    setStatus('sonda+descoberta completa - copie o log', 'ok');
+    setStatus('sonda completa - copie o log', 'ok');
   } catch (e) { log('ERRO na sonda: ' + errStr(e)); }
-  $('btnProbe').disabled = false;
+  finally {
+    $('btnProbe').disabled = false;
+    $('btnScan').disabled = false;
+    $('btnMonitor').disabled = false;
+  }
 }
 
 let monTimer = null;
