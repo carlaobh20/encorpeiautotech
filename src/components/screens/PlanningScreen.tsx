@@ -3,11 +3,13 @@ import { useAppStore } from '../../stores/appStore';
 import { useCopilot } from '../../hooks/useCopilot';
 import { formatDuration } from '../../modules/navigation/geo';
 import { RESERVE_SOC_PCT } from '../../config/assumptions';
+import { ConfidenceBadge } from '../cockpit/ConfidenceBadge';
+import { SocSlider } from '../cockpit/SocSlider';
 
 /**
  * ESTADO 2 — Destino escolhido. O card de decisao:
- * distancia, tempo, chegada, bateria agora/na chegada, consumo previsto
- * e UMA conclusao: precisa ou nao carregar. Botao grande: INICIAR VIAGEM.
+ * metricas, TIMELINE ENERGETICA (agora → parada ⚡ → destino) e UMA
+ * conclusao clara. Botao grande: INICIAR VIAGEM.
  */
 
 export function PlanningScreen() {
@@ -15,14 +17,16 @@ export function PlanningScreen() {
   const plan = useAppStore((s) => s.plan);
   const planning = useAppStore((s) => s.planning);
   const planError = useAppStore((s) => s.planError);
+  const chargingStop = useAppStore((s) => s.chargingStop);
   const cancelPlanning = useAppStore((s) => s.cancelPlanning);
   const startNavigation = useAppStore((s) => s.startNavigation);
   const soc = useVehicleStore((s) => s.data.soc);
-  const { horizon } = useCopilot();
+  const { horizon, confidence } = useCopilot();
 
-  const arrivalTime = plan ? new Date(Date.now() + plan.durationMin * 60000) : null;
-  const socArrival = horizon?.socAtArrivalPct ?? null;
-  const needsCharge = socArrival !== null && socArrival < RESERVE_SOC_PCT;
+  const chargeMin = chargingStop?.chargeMin ?? 0;
+  const arrivalTime = plan ? new Date(Date.now() + (plan.durationMin + chargeMin) * 60000) : null;
+  const socArrival = chargingStop ? chargingStop.socAtArrivalPct : horizon?.socAtArrivalPct ?? null;
+  const needsCharge = chargingStop !== null || (socArrival !== null && socArrival < RESERVE_SOC_PCT);
   const tight = socArrival !== null && !needsCharge && socArrival < RESERVE_SOC_PCT + 8;
 
   return (
@@ -33,7 +37,10 @@ export function PlanningScreen() {
           <span className="plan-arrow">↓</span>
           <span className="plan-to">{destination?.name.split(',')[0] ?? '—'}</span>
         </div>
-        <button className="summary-close" onClick={cancelPlanning} aria-label="Cancelar">✕</button>
+        <div className="plan-head-right">
+          <ConfidenceBadge report={confidence} compact />
+          <button className="summary-close" onClick={cancelPlanning} aria-label="Cancelar">✕</button>
+        </div>
       </div>
 
       {planning && <div className="plan-loading">Calculando a melhor rota…</div>}
@@ -46,14 +53,16 @@ export function PlanningScreen() {
 
       {plan && !planning && (
         <>
+          <SocSlider />
+
           <div className="plan-grid">
             <div className="sum-metric">
               <div className="sum-metric-value">{plan.distanceKm.toFixed(0)}<span className="sum-metric-unit"> km</span></div>
               <div className="sum-metric-label">Distância</div>
             </div>
             <div className="sum-metric">
-              <div className="sum-metric-value">{formatDuration(plan.durationMin)}</div>
-              <div className="sum-metric-label">Tempo</div>
+              <div className="sum-metric-value">{formatDuration(plan.durationMin + chargeMin)}</div>
+              <div className="sum-metric-label">{chargeMin > 0 ? 'Tempo c/ recarga' : 'Tempo'}</div>
             </div>
             <div className="sum-metric">
               <div className="sum-metric-value">{arrivalTime?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
@@ -64,7 +73,7 @@ export function PlanningScreen() {
               <div className="sum-metric-label">Bateria atual</div>
             </div>
             <div className="sum-metric">
-              <div className="sum-metric-value" style={{ color: needsCharge ? 'var(--critical)' : tight ? 'var(--warn)' : 'var(--good)' }}>
+              <div className="sum-metric-value" style={{ color: needsCharge ? 'var(--warn)' : tight ? 'var(--warn)' : 'var(--good)' }}>
                 {socArrival !== null ? socArrival : '—'}<span className="sum-metric-unit">%</span>
               </div>
               <div className="sum-metric-label">Bateria prevista</div>
@@ -75,18 +84,52 @@ export function PlanningScreen() {
             </div>
           </div>
 
-          <div className={'plan-verdict ' + (needsCharge ? 'tone-critical' : tight ? 'tone-warn' : 'tone-good')}>
+          {/* TIMELINE ENERGETICA — a viagem como linha de energia */}
+          {soc !== null && (
+            <div className="plan-timeline">
+              <div className="tl-node">
+                <span className="tl-soc">{soc.toFixed(0)}%</span>
+                <span className="tl-label">agora</span>
+              </div>
+              <div className="tl-line" />
+              {chargingStop && (
+                <>
+                  <div className="tl-node tl-stop">
+                    <span className="tl-soc">⚡ {chargingStop.socAtStopPct}%</span>
+                    <span className="tl-label">
+                      {chargingStop.charger ? chargingStop.charger.name.split(/[,-]/)[0].trim() : 'carregador · km ' + chargingStop.km}
+                    </span>
+                    <span className="tl-sub">carregar até {chargingStop.chargeToPct}% · ~{chargingStop.chargeMin} min</span>
+                  </div>
+                  <div className="tl-line" />
+                </>
+              )}
+              <div className="tl-node">
+                <span className="tl-soc" style={{ color: needsCharge || tight ? 'var(--warn)' : 'var(--good)' }}>
+                  {socArrival !== null ? socArrival + '%' : '—'}
+                </span>
+                <span className="tl-label">destino</span>
+              </div>
+            </div>
+          )}
+
+          <div className={'plan-verdict ' + (needsCharge ? 'tone-warn' : tight ? 'tone-warn' : 'tone-good')}>
             <span className="ai-dot" />
-            {needsCharge
-              ? 'Será necessário recarregar no caminho.'
-              : tight
-                ? 'Você chega, mas com margem apertada. Dirija com calma.'
-                : 'Não será necessário recarregar.'}
+            {chargingStop
+              ? '1 parada de recarga · ' + (chargingStop.charger ? chargingStop.charger.name.split(/[,-]/)[0].trim() : 'próxima ao km ' + chargingStop.km) + ' · ~' + chargingStop.chargeMin + ' min'
+              : needsCharge
+                ? 'Será necessário recarregar no caminho.'
+                : tight
+                  ? 'Você chega, mas com margem apertada. Dirija com calma.'
+                  : 'Não será necessário recarregar.'}
           </div>
 
-          <button className="btn btn-primary btn-start" onClick={startNavigation}>INICIAR VIAGEM</button>
+          <button className="btn btn-primary btn-start" onClick={startNavigation} disabled={soc === null}>
+            {soc === null ? 'INFORME A BATERIA ACIMA' : 'INICIAR VIAGEM'}
+          </button>
         </>
       )}
     </div>
   );
 }
+
