@@ -26,12 +26,16 @@ interface VehicleStore {
   tripState: TripState;
   currentTrip: TripRecord | null;
   tripHistory: TripRecord[];
+  /** Viagem exibida no Resumo (recem-encerrada ou aberta pelo historico). */
+  summaryTrip: TripRecord | null;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   startTrip: () => void;
   pauseTrip: () => void;
   resumeTrip: () => void;
   finishTrip: () => void;
+  openSummary: (trip: TripRecord) => void;
+  closeSummary: () => void;
 }
 
 const source = createSource();
@@ -74,6 +78,7 @@ export const useVehicleStore = create<VehicleStore>((set, get) => {
     tripState: 'idle',
     currentTrip: null,
     tripHistory: loadTrips(),
+    summaryTrip: null,
 
     connect: () => source.connect(),
     disconnect: () => source.disconnect(),
@@ -93,8 +98,17 @@ export const useVehicleStore = create<VehicleStore>((set, get) => {
     },
     finishTrip: () => {
       stopGeo();
-      tripEngine.finish(get().data);
-      set({ tripState: 'idle', currentTrip: null, tripHistory: loadTrips() });
+      const finished = tripEngine.finish(get().data);
+      set({
+        tripState: 'idle',
+        currentTrip: null,
+        tripHistory: loadTrips(),
+        // Ao encerrar, o Resumo de viagem abre automaticamente.
+        summaryTrip: finished,
+      });
     },
+
+    openSummary: (trip) => set({ summaryTrip: trip }),
+    closeSummary: () => set({ summaryTrip: null }),
   };
 });
