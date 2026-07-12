@@ -189,7 +189,7 @@ async function connect() {
     notifyChar.addEventListener('characteristicvaluechanged', onChunk);
     setStatus('conectado a ' + (device.name || '?') + ' - inicializando ELM...', 'ok');
     await cmd('ATZ'); await new Promise(r => setTimeout(r, 1000));
-    await cmd('ATE0'); await cmd('ATL0'); await cmd('ATS1'); await cmd('ATH1'); await cmd('ATSP0');
+    await cmd('ATE0'); await cmd('ATL0'); await cmd('ATS1'); await cmd('ATH1'); await cmd('ATSP6');   // protocolo 6 confirmado (ISO15765 11bit 500k) - sem busca lenta
     const rv = await cmd('ATRV');
     const m = rv.match(/([\d.]+)V/); if (m) $('vVolt').textContent = m[1] + ' V';
     setStatus('ELM pronto. Ligue o carro (ready) e toque em Escanear.', 'ok');
