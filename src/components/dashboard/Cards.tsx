@@ -151,6 +151,7 @@ export function TripBar() {
 
 export function TripHistory() {
   const history = useVehicleStore((s) => s.tripHistory);
+  const openSummary = useVehicleStore((s) => s.openSummary);
   if (history.length === 0) return null;
   return (
     <section className="card" aria-label="Histórico de viagens">
@@ -160,7 +161,7 @@ export function TripHistory() {
       </header>
       <ul className="trip-history">
         {history.slice(0, 5).map((t) => (
-          <li key={t.id} className="trip-history-item">
+          <li key={t.id} className="trip-history-item" onClick={() => openSummary(t)} role="button" tabIndex={0}>
             <span>{new Date(t.startedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}{' '}
               {new Date(t.startedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
             <span>{t.distanceKm.toFixed(1)} km</span>
