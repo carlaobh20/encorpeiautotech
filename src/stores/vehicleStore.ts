@@ -10,6 +10,10 @@ import { TripEngine, loadTrips, type TripRecord, type TripState } from '../modul
  * Store global. A UI lê daqui; os serviços escrevem aqui.
  * Trocar a fonte de dados (mock → Web Bluetooth → ponte nativa)
  * é trocar UMA linha em createSource().
+ *
+ * SOC manual: quando NÃO há Vgate, o motorista informa a bateria uma vez
+ * (slider) e o copiloto passa a ESTIMAR a descarga pelo modelo de energia.
+ * Assim o produto inteiro funciona hoje, antes da validação do hardware.
  */
 
 function createSource(): VehicleDataSource {
@@ -20,6 +24,15 @@ function createSource(): VehicleDataSource {
     return new SupabaseRealtimeSource();
 }
 
+const MANUAL_SOC_KEY = 'encorpei-auto:manual-soc';
+
+function loadManualSoc(): number | null {
+  try {
+    const v = Number(localStorage.getItem(MANUAL_SOC_KEY));
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch { return null; }
+}
+
 interface VehicleStore {
   data: VehicleData;
   status: ConnectionStatus;
@@ -28,6 +41,10 @@ interface VehicleStore {
   tripHistory: TripRecord[];
   /** Viagem exibida no Resumo (recem-encerrada ou aberta pelo historico). */
   summaryTrip: TripRecord | null;
+  /** SOC informado pelo motorista quando nao ha telemetria. */
+  manualSoc: number | null;
+  /** true assim que o carro entregar UM soc real — o manual sai de cena. */
+  hasTelemetrySoc: boolean;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   startTrip: () => void;
@@ -36,6 +53,9 @@ interface VehicleStore {
   finishTrip: () => void;
   openSummary: (trip: TripRecord) => void;
   closeSummary: () => void;
+  setManualSoc: (v: number) => void;
+  /** Descarga estimada pelo modelo durante a navegacao (so sem telemetria). */
+  setEstimatedSoc: (v: number) => void;
 }
 
 const source = createSource();
@@ -61,24 +81,35 @@ function stopGeo() {
   }
 }
 
+const clampSoc = (v: number) => Math.max(0, Math.min(100, v));
+
 export const useVehicleStore = create<VehicleStore>((set, get) => {
   source.onData((data) => {
-    tripEngine.ingest(data);
+    const st = get();
+    const telem = data.soc !== null;
+    // Sem soc do carro: preserva o soc corrente (manual/estimado) em vez de apagar.
+    const merged = telem ? data : { ...data, soc: st.data.soc ?? st.manualSoc };
+    tripEngine.ingest(merged);
     set({
-      data,
+      data: merged,
+      hasTelemetrySoc: telem ? true : st.hasTelemetrySoc,
       currentTrip: tripEngine.current ? { ...tripEngine.current } : null,
     });
   });
 
   source.onStatus((status) => set({ status: { ...status } }));
 
+  const initialManual = loadManualSoc();
+
   return {
-    data: EMPTY_VEHICLE_DATA,
+    data: initialManual !== null ? { ...EMPTY_VEHICLE_DATA, soc: initialManual } : EMPTY_VEHICLE_DATA,
     status: source.getStatus(),
     tripState: 'idle',
     currentTrip: null,
     tripHistory: loadTrips(),
     summaryTrip: null,
+    manualSoc: initialManual,
+    hasTelemetrySoc: false,
 
     connect: () => source.connect(),
     disconnect: () => source.disconnect(),
@@ -99,10 +130,16 @@ export const useVehicleStore = create<VehicleStore>((set, get) => {
     finishTrip: () => {
       stopGeo();
       const finished = tripEngine.finish(get().data);
+      const st = get();
+      // Sem telemetria: o soc estimado da chegada vira o novo soc manual.
+      if (!st.hasTelemetrySoc && st.data.soc !== null) {
+        try { localStorage.setItem(MANUAL_SOC_KEY, String(Math.round(st.data.soc))); } catch { /* ignore */ }
+      }
       set({
         tripState: 'idle',
         currentTrip: null,
         tripHistory: loadTrips(),
+        manualSoc: !st.hasTelemetrySoc && st.data.soc !== null ? Math.round(st.data.soc) : st.manualSoc,
         // Ao encerrar, o Resumo de viagem abre automaticamente.
         summaryTrip: finished,
       });
@@ -110,5 +147,19 @@ export const useVehicleStore = create<VehicleStore>((set, get) => {
 
     openSummary: (trip) => set({ summaryTrip: trip }),
     closeSummary: () => set({ summaryTrip: null }),
+
+    setManualSoc: (v) => {
+      const soc = Math.round(clampSoc(v));
+      try { localStorage.setItem(MANUAL_SOC_KEY, String(soc)); } catch { /* ignore */ }
+      const st = get();
+      set({ manualSoc: soc, data: st.hasTelemetrySoc ? st.data : { ...st.data, soc } });
+    },
+
+    setEstimatedSoc: (v) => {
+      const st = get();
+      if (st.hasTelemetrySoc) return; // telemetria real sempre vence
+      set({ data: { ...st.data, soc: Math.round(clampSoc(v) * 10) / 10 } });
+    },
   };
 });
+
