@@ -1,0 +1,88 @@
+/* ============================================================
+   Sprint V4.1 — Modo Confianca, SOC manual e Timeline com parada
+   ============================================================ */
+
+.plan-head-right { display: flex; align-items: center; gap: 10px; }
+
+/* --- Modo Confianca --- */
+.conf-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  color: var(--text, #e8edf2); font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+.conf-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.conf-dot-high { background: var(--good, #3ddcc4); box-shadow: 0 0 8px var(--good, #3ddcc4); }
+.conf-dot-med { background: var(--warn, #ffb04a); box-shadow: 0 0 8px var(--warn, #ffb04a); }
+.conf-dot-low { background: var(--critical, #ff6b6b); box-shadow: 0 0 8px var(--critical, #ff6b6b); }
+
+.conf-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(5, 8, 12, 0.55);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; padding: 22px;
+}
+.conf-card {
+  width: 100%; max-width: 380px;
+  background: rgba(16, 22, 29, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px; padding: 18px;
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+.conf-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; margin-bottom: 12px; }
+.conf-list { display: flex; flex-direction: column; gap: 8px; }
+.conf-row { display: flex; gap: 9px; align-items: baseline; font-size: 13px; line-height: 1.35; }
+.conf-mark { width: 16px; text-align: center; font-weight: 700; flex: 0 0 auto; }
+.conf-row-ok .conf-mark { color: var(--good, #3ddcc4); }
+.conf-row-warn .conf-mark { color: var(--warn, #ffb04a); }
+.conf-row-warn .conf-text { opacity: 0.85; }
+.conf-detail { opacity: 0.55; font-size: 12px; }
+.conf-close { width: 100%; margin-top: 14px; }
+
+/* --- Ajuste manual de SOC --- */
+.soc-adjust {
+  margin: 10px 0 2px; padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+.soc-adjust-unset { border-color: rgba(255, 176, 74, 0.45); }
+.soc-adjust-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+.soc-adjust-value { font-weight: 700; color: var(--teal, #3ddcc4); font-variant-numeric: tabular-nums; }
+.soc-adjust-hint { font-size: 11px; opacity: 0.55; margin-top: 7px; }
+.soc-range { width: 100%; accent-color: var(--teal, #3ddcc4); height: 26px; touch-action: none; }
+
+/* --- Timeline energetica no planejamento --- */
+.plan-timeline {
+  display: flex; align-items: flex-start; gap: 4px;
+  margin: 12px 0 2px; padding: 12px 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px; overflow-x: auto;
+}
+.tl-node { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 64px; text-align: center; }
+.tl-soc { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tl-label { font-size: 11px; opacity: 0.6; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-sub { font-size: 10px; color: var(--warn, #ffb04a); }
+.tl-line { flex: 1; height: 2px; margin-top: 11px; min-width: 18px;
+  background: linear-gradient(90deg, rgba(61, 220, 196, 0.5), rgba(255, 176, 74, 0.5)); border-radius: 2px; }
+.tl-stop .tl-soc { color: var(--warn, #ffb04a); }
+
+/* --- Navegacao: linha secundaria (confianca + proxima manobra) --- */
+.nav-subrow {
+  display: flex; align-items: center; gap: 8px;
+  margin: 6px 14px 0; pointer-events: auto;
+}
+.nav-next {
+  font-size: 12px; font-weight: 600; opacity: 0.9;
+  padding: 5px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.horizon-charge .horizon-soc { color: var(--warn, #ffb04a); }
