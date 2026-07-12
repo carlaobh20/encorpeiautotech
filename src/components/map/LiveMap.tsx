@@ -129,8 +129,9 @@ export function LiveMap() {
         ready.current = true;
         m.resize();
       });
-      m.on('dragstart', () => setFollow(false));
-      m.on('rotatestart', () => setFollow(false));
+      // So gesto DO USUARIO desliga o follow — movimento programatico da camera nao conta.
+      m.on('dragstart', (e: any) => { if (e?.originalEvent) setFollow(false); });
+      m.on('rotatestart', (e: any) => { if (e?.originalEvent) setFollow(false); });
       map.current = m;
     }, 100);
     return () => clearInterval(timer);
