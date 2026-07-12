@@ -1,44 +1,45 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useVehicleStore } from '../stores/vehicleStore';
 import { useLocationStore } from '../stores/locationStore';
+import { useAppStore, copilotFeed } from '../stores/appStore';
 import { AION_UT_DRIVER } from '../modules/vehicle/drivers/aion-ut';
 import { haversineKm } from '../modules/trip/TripEngine';
-import { predict, socAtArrivalIfSlower, type Prediction, type PredictionInput } from '../modules/intelligence/PredictionEngine';
-import { deriveInsights, type Insight } from '../modules/intelligence/InsightEngine';
+import { predict, type Prediction, type PredictionInput } from '../modules/intelligence/PredictionEngine';
 import { assessHealth, type HealthReport } from '../modules/intelligence/HealthEngine';
+import { computeHorizon, type EnergyHorizon } from '../modules/intelligence/EnergyHorizon';
+import { computeProgress, fetchRoute } from '../modules/navigation/NavigationEngine';
+import { RESERVE_SOC_PCT, ROAD_FACTOR } from '../config/assumptions';
+import { sampleBuffer } from '../modules/telemetry/SampleBuffer';
 
 /**
- * useCopilot — o ponto unico onde os tres engines encontram os dados vivos.
- *
- * Le VehicleData (simulador hoje, gateway/BLE amanha) + GPS + destino e
- * devolve previsao, insights e saude ja prontos para a UI. Nenhum
- * componente calcula nada: so exibe o que sai daqui.
+ * Os engines encontram os dados vivos aqui — e em nenhum outro lugar.
+ * useCopilot: leitura derivada (previsao, horizon, saude) para qualquer tela.
+ * useNavigationLoop: o "tick" do modo navegacao (progresso, chegada, IA, reroute).
  */
 
-const ROAD_FACTOR = 1.25;              // rota real ~25% maior que a linha reta
-const FALLBACK_WH_PER_KM = Math.round(1000 / AION_UT_DRIVER.nominalKmPerKwh);
+const NOMINAL_WH_KM = Math.round(1000 / AION_UT_DRIVER.nominalKmPerKwh);
 
 export interface CopilotView {
   prediction: Prediction | null;
-  insights: Insight[];
+  horizon: EnergyHorizon | null;
   health: HealthReport;
   distanceRemainingKm: number | null;
-  /** Consumo recente usado no calculo (Wh/km) — transparencia do modelo. */
   consumptionWhPerKm: number;
-  /** Eficiencia atual em kWh/100km para exibicao. */
   efficiencyKwh100: number | null;
+  nominalWhPerKm: number;
 }
 
 export function useCopilot(): CopilotView {
   const data = useVehicleStore((s) => s.data);
   const currentTrip = useVehicleStore((s) => s.currentTrip);
-  const history = useVehicleStore((s) => s.tripHistory);
   const position = useLocationStore((s) => s.position);
-  const destination = useLocationStore((s) => s.destination);
+  const plan = useAppStore((s) => s.plan);
+  const progress = useAppStore((s) => s.progress);
+  const mode = useAppStore((s) => s.mode);
 
   return useMemo(() => {
-    // --- consumo recente (Wh/km) ---
-    let consumption = FALLBACK_WH_PER_KM;
+    // consumo recente (Wh/km)
+    let consumption = NOMINAL_WH_KM;
     if (currentTrip && currentTrip.distanceKm > 0.8) {
       const netKwh = Math.max(0.05, currentTrip.energyUsedKwh - currentTrip.energyRegenKwh);
       consumption = (netKwh / currentTrip.distanceKm) * 1000;
@@ -46,56 +47,123 @@ export function useCopilot(): CopilotView {
       consumption = data.consumptionKwh100 * 10;
     }
 
-    // --- media historica p/ delta de eficiencia ---
-    const past = history.filter((t) => t.distanceKm > 2);
-    let efficiencyDeltaPct: number | null = null;
-    if (past.length >= 2 && currentTrip && currentTrip.distanceKm > 1) {
-      const avg = past.reduce((s, t) => s + (t.energyUsedKwh - t.energyRegenKwh) / t.distanceKm, 0) / past.length * 1000;
-      if (avg > 0) efficiencyDeltaPct = ((consumption - avg) / avg) * 100;
-    }
-
-    // --- distancia restante ate o destino ---
+    // distancia restante: rota real > linha reta
     let distanceRemainingKm: number | null = null;
-    if (position && destination) {
-      distanceRemainingKm = haversineKm(position.lat, position.lng, destination.lat, destination.lng) * ROAD_FACTOR;
+    if (plan && mode === 'navigation' && progress) distanceRemainingKm = progress.remainingKm;
+    else if (plan) distanceRemainingKm = plan.distanceKm;
+    else if (position && useAppStore.getState().destination) {
+      const d = useAppStore.getState().destination!;
+      distanceRemainingKm = haversineKm(position.lat, position.lng, d.lat, d.lng) * ROAD_FACTOR;
     }
 
-    // --- previsao ---
     const speed = data.speedKmh ?? position?.speedKmh ?? 0;
     let prediction: Prediction | null = null;
-    let slowerHint: { deltaSpeedKmh: number; socPct: number } | null = null;
-    if (data.soc !== null && distanceRemainingKm !== null && distanceRemainingKm > 0.3) {
+    let horizon: EnergyHorizon | null = null;
+
+    if (data.soc !== null && plan) {
+      horizon = computeHorizon(plan, data.soc, consumption, Math.max(20, speed), AION_UT_DRIVER.batteryCapacityKwh, progress?.traveledKm ?? 0);
+    }
+    if (data.soc !== null && distanceRemainingKm !== null && distanceRemainingKm > 0.2) {
       const input: PredictionInput = {
         socPct: data.soc,
         packUsableKwh: AION_UT_DRIVER.batteryCapacityKwh,
         distanceRemainingKm,
-        recentConsumptionWhPerKm: consumption,
+        recentConsumptionWhPerKm: horizon ? horizon.avgWhPerKm : consumption,
         speedKmh: speed,
+        reserveSocPct: RESERVE_SOC_PCT,
       };
       prediction = predict(input);
-      if (speed > 55) {
-        slowerHint = { deltaSpeedKmh: 10, socPct: socAtArrivalIfSlower(input, 10) };
-      }
     }
-
-    const insights = deriveInsights({
-      prediction,
-      powerKw: data.powerKw,
-      batteryTempC: data.batteryTempC,
-      speedKmh: data.speedKmh,
-      slowerHint,
-      efficiencyDeltaPct,
-    });
-
-    const health = assessHealth(data);
 
     return {
       prediction,
-      insights,
-      health,
+      horizon,
+      health: assessHealth(data),
       distanceRemainingKm,
       consumptionWhPerKm: Math.round(consumption),
-      efficiencyKwh100: consumption > 0 ? Math.round(consumption) / 10 : null,
+      efficiencyKwh100: Math.round(consumption) / 10,
+      nominalWhPerKm: NOMINAL_WH_KM,
     };
-  }, [data, currentTrip, history, position, destination]);
+  }, [data, currentTrip, position, plan, progress, mode]);
+}
+
+/** O tick do modo navegacao. Montar UMA vez (na NavigationScreen). */
+export function useNavigationLoop() {
+  const mode = useAppStore((s) => s.mode);
+  const offRouteTicks = useRef(0);
+  const rerouting = useRef(false);
+  const hintIdx = useRef(0);
+
+  // progresso + chegada + reroute, a cada nova posicao
+  useEffect(() => {
+    if (mode !== 'navigation') return;
+    const unsub = useLocationStore.subscribe((s, prev) => {
+      const pos = s.position;
+      if (!pos || pos === prev.position) return;
+      const { plan } = useAppStore.getState();
+      if (!plan) return;
+      const speed = useVehicleStore.getState().data.speedKmh ?? pos.speedKmh ?? 0;
+      const p = computeProgress(plan, { lat: pos.lat, lng: pos.lng }, hintIdx.current, speed);
+      hintIdx.current = p.routeIdx;
+      useAppStore.getState().setProgress(p);
+
+      if (p.arrived) { useAppStore.getState().endNavigation(); return; }
+
+      // fora da rota por varios ticks → recalcular
+      if (p.offRouteKm > 0.09) offRouteTicks.current++;
+      else offRouteTicks.current = 0;
+      if (offRouteTicks.current >= 5 && !rerouting.current && !useAppStore.getState().isMock) {
+        rerouting.current = true;
+        offRouteTicks.current = 0;
+        fetchRoute({ lat: pos.lat, lng: pos.lng }, plan.to, plan.toName)
+          .then((np) => { hintIdx.current = 0; useAppStore.setState({ plan: np }); })
+          .catch(() => { /* mantem plano atual */ })
+          .finally(() => { rerouting.current = false; });
+      }
+    });
+    return unsub;
+  }, [mode]);
+
+  // IA copiloto + amostras p/ graficos + expiracao dos cartoes
+  useEffect(() => {
+    if (mode !== 'navigation') return;
+    const timer = setInterval(() => {
+      const app = useAppStore.getState();
+      const veh = useVehicleStore.getState();
+      const d = veh.data;
+      sampleBuffer.push({
+        t: Date.now(), soc: d.soc, powerKw: d.powerKw,
+        consumptionKwh100: d.consumptionKwh100, batteryTempC: d.batteryTempC, speedKmh: d.speedKmh,
+      });
+
+      let consumption: number | null = d.consumptionKwh100 !== null ? d.consumptionKwh100 * 10 : null;
+      const trip = veh.currentTrip;
+      if (trip && trip.distanceKm > 0.8) {
+        consumption = ((Math.max(0.05, trip.energyUsedKwh - trip.energyRegenKwh)) / trip.distanceKm) * 1000;
+      }
+      let socAtArrival: number | null = null;
+      if (app.plan && d.soc !== null) {
+        const h = computeHorizon(app.plan, d.soc, consumption ?? NOMINAL_WH_KM,
+          Math.max(20, d.speedKmh ?? 0), AION_UT_DRIVER.batteryCapacityKwh, app.progress?.traveledKm ?? 0);
+        socAtArrival = h.socAtArrivalPct;
+      }
+
+      const card = copilotFeed.evaluate({
+        navigating: true,
+        socPct: d.soc,
+        socAtArrivalPct: socAtArrival,
+        speedKmh: d.speedKmh,
+        powerKw: d.powerKw,
+        batteryTempC: d.batteryTempC,
+        regenKwhTrip: trip?.energyRegenKwh ?? 0,
+        consumptionWhPerKm: consumption,
+        nominalWhPerKm: NOMINAL_WH_KM,
+        remainingKm: app.progress?.remainingKm ?? null,
+        cheaperChargerAheadKm: null, // aguarda fonte de precos (parceria)
+      });
+      if (card) app.pushCard(card);
+      app.expireCards();
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [mode]);
 }
