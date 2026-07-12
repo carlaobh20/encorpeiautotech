@@ -7,13 +7,14 @@ import { haversineKm } from '../modules/trip/TripEngine';
 import { predict, type Prediction, type PredictionInput } from '../modules/intelligence/PredictionEngine';
 import { assessHealth, type HealthReport } from '../modules/intelligence/HealthEngine';
 import { computeHorizon, type EnergyHorizon } from '../modules/intelligence/EnergyHorizon';
+import { assessConfidence, type ConfidenceReport } from '../modules/intelligence/ConfidenceEngine';
 import { computeProgress, fetchRoute } from '../modules/navigation/NavigationEngine';
 import { RESERVE_SOC_PCT, ROAD_FACTOR } from '../config/assumptions';
 import { sampleBuffer } from '../modules/telemetry/SampleBuffer';
 
 /**
  * Os engines encontram os dados vivos aqui — e em nenhum outro lugar.
- * useCopilot: leitura derivada (previsao, horizon, saude) para qualquer tela.
+ * useCopilot: leitura derivada (previsao, horizon, saude, confianca).
  * useNavigationLoop: o "tick" do modo navegacao (progresso, chegada, IA, reroute).
  */
 
@@ -23,6 +24,7 @@ export interface CopilotView {
   prediction: Prediction | null;
   horizon: EnergyHorizon | null;
   health: HealthReport;
+  confidence: ConfidenceReport;
   distanceRemainingKm: number | null;
   consumptionWhPerKm: number;
   efficiencyKwh100: number | null;
@@ -32,6 +34,8 @@ export interface CopilotView {
 export function useCopilot(): CopilotView {
   const data = useVehicleStore((s) => s.data);
   const currentTrip = useVehicleStore((s) => s.currentTrip);
+  const hasTelemetrySoc = useVehicleStore((s) => s.hasTelemetrySoc);
+  const manualSoc = useVehicleStore((s) => s.manualSoc);
   const position = useLocationStore((s) => s.position);
   const plan = useAppStore((s) => s.plan);
   const progress = useAppStore((s) => s.progress);
@@ -40,11 +44,14 @@ export function useCopilot(): CopilotView {
   return useMemo(() => {
     // consumo recente (Wh/km)
     let consumption = NOMINAL_WH_KM;
+    let consumptionObserved = false;
     if (currentTrip && currentTrip.distanceKm > 0.8) {
       const netKwh = Math.max(0.05, currentTrip.energyUsedKwh - currentTrip.energyRegenKwh);
       consumption = (netKwh / currentTrip.distanceKm) * 1000;
+      consumptionObserved = true;
     } else if (data.consumptionKwh100 !== null && data.consumptionKwh100 > 0) {
       consumption = data.consumptionKwh100 * 10;
+      consumptionObserved = true;
     }
 
     // distancia restante: rota real > linha reta
@@ -75,16 +82,28 @@ export function useCopilot(): CopilotView {
       prediction = predict(input);
     }
 
+    // Modo Confianca — o quanto da pra confiar no que estamos prevendo
+    const confidence = assessConfidence({
+      telemetryLive: hasTelemetrySoc,
+      socManual: !hasTelemetrySoc && manualSoc !== null,
+      socKnown: data.soc !== null,
+      gpsFresh: !!position && Date.now() - position.t < 12000 && (position.accuracyM === null || position.accuracyM < 80),
+      routeFresh: !!plan && (mode === 'navigation' ? progress !== null : Date.now() - plan.fetchedAt < 15 * 60000),
+      consumptionObserved,
+      marginPct: prediction?.marginPct ?? null,
+    });
+
     return {
       prediction,
       horizon,
       health: assessHealth(data),
+      confidence,
       distanceRemainingKm,
       consumptionWhPerKm: Math.round(consumption),
       efficiencyKwh100: Math.round(consumption) / 10,
       nominalWhPerKm: NOMINAL_WH_KM,
     };
-  }, [data, currentTrip, position, plan, progress, mode]);
+  }, [data, currentTrip, hasTelemetrySoc, manualSoc, position, plan, progress, mode]);
 }
 
 /** O tick do modo navegacao. Montar UMA vez (na NavigationScreen). */
@@ -116,7 +135,7 @@ export function useNavigationLoop() {
         rerouting.current = true;
         offRouteTicks.current = 0;
         fetchRoute({ lat: pos.lat, lng: pos.lng }, plan.to, plan.toName)
-          .then((np) => { hintIdx.current = 0; useAppStore.setState({ plan: np }); })
+          .then((np) => { hintIdx.current = 0; useAppStore.setState({ plan: np }); useAppStore.getState().refreshEnergyPlan(); })
           .catch(() => { /* mantem plano atual */ })
           .finally(() => { rerouting.current = false; });
       }
@@ -124,23 +143,34 @@ export function useNavigationLoop() {
     return unsub;
   }, [mode]);
 
-  // IA copiloto + amostras p/ graficos + expiracao dos cartoes
+  // IA copiloto + amostras p/ graficos + expiracao dos cartoes + soc estimado
   useEffect(() => {
     if (mode !== 'navigation') return;
     const timer = setInterval(() => {
       const app = useAppStore.getState();
       const veh = useVehicleStore.getState();
-      const d = veh.data;
-      sampleBuffer.push({
-        t: Date.now(), soc: d.soc, powerKw: d.powerKw,
-        consumptionKwh100: d.consumptionKwh100, batteryTempC: d.batteryTempC, speedKmh: d.speedKmh,
-      });
+      let d = veh.data;
 
       let consumption: number | null = d.consumptionKwh100 !== null ? d.consumptionKwh100 * 10 : null;
       const trip = veh.currentTrip;
       if (trip && trip.distanceKm > 0.8) {
         consumption = ((Math.max(0.05, trip.energyUsedKwh - trip.energyRegenKwh)) / trip.distanceKm) * 1000;
       }
+
+      // Sem Vgate: a bateria desce pelo MODELO a partir do valor informado.
+      // Honesto (o Modo Confianca deixa claro) e mantem toda a previsao viva.
+      if (!veh.hasTelemetrySoc && app.socAtNavStart !== null && app.progress) {
+        const usedKm = trip && trip.gpsDistanceKm > 0 ? Math.max(trip.gpsDistanceKm, app.progress.traveledKm) : app.progress.traveledKm;
+        const dropPct = (((consumption ?? NOMINAL_WH_KM) * usedKm) / 1000 / AION_UT_DRIVER.batteryCapacityKwh) * 100;
+        veh.setEstimatedSoc(app.socAtNavStart - dropPct);
+        d = useVehicleStore.getState().data;
+      }
+
+      sampleBuffer.push({
+        t: Date.now(), soc: d.soc, powerKw: d.powerKw,
+        consumptionKwh100: d.consumptionKwh100, batteryTempC: d.batteryTempC, speedKmh: d.speedKmh,
+      });
+
       let socAtArrival: number | null = null;
       if (app.plan && d.soc !== null) {
         const h = computeHorizon(app.plan, d.soc, consumption ?? NOMINAL_WH_KM,
@@ -167,3 +197,4 @@ export function useNavigationLoop() {
     return () => clearInterval(timer);
   }, [mode]);
 }
+
