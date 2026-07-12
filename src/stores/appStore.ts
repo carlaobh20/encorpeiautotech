@@ -10,8 +10,10 @@
 import { create } from 'zustand';
 import { fetchRoute, computeProgress, type RoutePlan, type NavProgress } from '../modules/navigation/NavigationEngine';
 import { DriveSimulator } from '../modules/navigation/DriveSimulator';
-import { findChargers, type Charger } from '../modules/charging/ChargingEngine';
+import { findChargers, planChargingStop, type Charger, type ChargingStop } from '../modules/charging/ChargingEngine';
+import { computeHorizon } from '../modules/intelligence/EnergyHorizon';
 import { CopilotFeed, type CopilotCard } from '../modules/intelligence/CopilotAI';
+import { AION_UT_DRIVER } from '../modules/vehicle/drivers/aion-ut';
 import type { LatLng } from '../modules/navigation/geo';
 import { useLocationStore } from './locationStore';
 import { useVehicleStore } from './vehicleStore';
@@ -38,6 +40,15 @@ function savePlaces(p: SavedPlaces) { localStorage.setItem(FAV_KEY, JSON.stringi
 export const copilotFeed = new CopilotFeed();
 export const driveSim = new DriveSimulator();
 
+/** Parada de recarga para um plano, com o soc/consumo atuais. Pura + assincrona. */
+async function computeStopFor(plan: RoutePlan): Promise<ChargingStop | null> {
+  const soc = useVehicleStore.getState().data.soc;
+  if (soc === null) return null;
+  const nominalWh = 1000 / AION_UT_DRIVER.nominalKmPerKwh;
+  const h = computeHorizon(plan, soc, nominalWh, 60, AION_UT_DRIVER.batteryCapacityKwh);
+  return planChargingStop(plan, soc, h.avgWhPerKm, AION_UT_DRIVER.batteryCapacityKwh);
+}
+
 interface AppStore {
   mode: AppMode;
   destination: Place | null;
@@ -50,6 +61,10 @@ interface AppStore {
   cards: CopilotCard[];
   places: SavedPlaces;
   isMock: boolean;
+  /** Parada de recarga planejada (ou null quando a chegada fecha sem parar). */
+  chargingStop: ChargingStop | null;
+  /** SOC no instante em que a navegacao comecou (base da descarga estimada sem Vgate). */
+  socAtNavStart: number | null;
 
   chooseDestination: (p: Place) => Promise<void>;
   startNavigation: () => void;
@@ -62,6 +77,8 @@ interface AppStore {
   setHome: (p: Place) => void;
   setWork: (p: Place) => void;
   loadChargersNear: (at: LatLng) => Promise<void>;
+  /** Recalcula a parada de recarga (ex.: motorista ajustou o SOC no slider). */
+  refreshEnergyPlan: () => Promise<void>;
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -76,12 +93,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
   cards: [],
   places: loadPlaces(),
   isMock: new URLSearchParams(window.location.search).get('source') === 'mock',
+  chargingStop: null,
+  socAtNavStart: null,
 
   chooseDestination: async (dest) => {
     const pos = useLocationStore.getState().position;
     // Sem GPS ainda: usa o centro padrao (o simulador dirige a rota mesmo assim)
     const from: LatLng = pos ? { lat: pos.lat, lng: pos.lng } : { lat: -19.9167, lng: -43.9345 };
-    set({ mode: 'planning', destination: dest, planning: true, planError: null, plan: null });
+    set({ mode: 'planning', destination: dest, planning: true, planError: null, plan: null, chargingStop: null });
     try {
       const plan = await fetchRoute(from, { lat: dest.lat, lng: dest.lng }, dest.name);
       // registra nos recentes
@@ -89,6 +108,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       places.recents = [dest, ...places.recents.filter((r) => r.name !== dest.name)].slice(0, 6);
       savePlaces(places);
       set({ plan, planning: false, places });
+      // parada de recarga em paralelo — nao atrasa o card de decisao
+      computeStopFor(plan)
+        .then((stop) => { if (get().plan === plan) set({ chargingStop: stop }); })
+        .catch(() => { /* sem parada calculavel: timeline segue sem parada */ });
     } catch (e: any) {
       set({ planning: false, planError: e?.message ?? 'Não foi possível calcular a rota.' });
     }
@@ -101,7 +124,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     sampleBuffer.clear();
     useVehicleStore.getState().startTrip();
     useLocationStore.getState().setFollow(true);
-    set({ mode: 'navigation', progress: null, cards: [] });
+    set({ mode: 'navigation', progress: null, cards: [], socAtNavStart: useVehicleStore.getState().data.soc });
 
     // No modo demo o simulador DIRIGE a rota real — produto testavel sem carro.
     if (isMock) {
@@ -114,7 +137,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  cancelPlanning: () => set({ mode: 'search', destination: null, plan: null, planError: null }),
+  cancelPlanning: () => set({ mode: 'search', destination: null, plan: null, planError: null, chargingStop: null }),
 
   endNavigation: () => {
     driveSim.stop();
@@ -124,7 +147,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   closeSummary: () => {
     useVehicleStore.getState().closeSummary();
-    set({ mode: 'search', destination: null, plan: null, progress: null });
+    set({ mode: 'search', destination: null, plan: null, progress: null, chargingStop: null, socAtNavStart: null });
   },
 
   setProgress: (p) => set({ progress: p }),
@@ -151,6 +174,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const chargers = await findChargers(at);
     set({ chargers, chargersLoading: false });
   },
+
+  refreshEnergyPlan: async () => {
+    const plan = get().plan;
+    if (!plan) return;
+    try {
+      const stop = await computeStopFor(plan);
+      if (get().plan === plan) set({ chargingStop: stop });
+    } catch { /* mantem a parada atual */ }
+  },
 }));
 
 /** Geocodificacao (Nominatim, gratuito) com vies para perto do usuario. */
@@ -173,3 +205,4 @@ export async function geocode(q: string): Promise<Place[]> {
     return [];
   }
 }
+
