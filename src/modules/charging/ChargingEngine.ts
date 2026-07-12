@@ -107,3 +107,57 @@ export function rank(chargers: Charger[]): Charger[] {
 
 /** Melhor parada quando a chegada nao fecha: procura perto do ponto da rota onde o SOC ~ reserva. */
 export function pickStopPoint(routeCoord: LatLng): LatLng { return routeCoord; }
+
+// ============================================================================
+// Planejamento de PARADA — a timeline energetica ganha o "onde e quanto".
+// ============================================================================
+
+import { pointAhead } from '../navigation/geo';
+import type { RoutePlan } from '../navigation/NavigationEngine';
+
+export interface ChargingStop {
+  km: number;                 // km da rota onde parar
+  coord: LatLng;
+  socAtStopPct: number;       // soc previsto ao chegar na parada
+  chargeToPct: number;        // "carregar ate X%"
+  socAtArrivalPct: number;    // soc previsto no destino APOS a recarga
+  chargeMin: number;          // tempo estimado de carga
+  charger: Charger | null;    // null = sem base de carregadores (sem chave OCM)
+}
+
+/**
+ * Decide onde parar e ate quanto carregar para chegar com a reserva intacta.
+ * Sem carregador na base? Degrada com elegancia: devolve o PONTO da rota
+ * ("carregador proximo ao km X") — a decisao continua clara pro motorista.
+ */
+export async function planChargingStop(
+  plan: RoutePlan,
+  socNowPct: number,
+  avgWhPerKm: number,
+  packKwh: number,
+  reservePct = 10,
+): Promise<ChargingStop | null> {
+  if (packKwh <= 0 || plan.distanceKm <= 1) return null;
+  const socPerKm = ((Math.max(80, avgWhPerKm) / 1000) / packKwh) * 100;
+  const socAtArrivalDirect = socNowPct - plan.distanceKm * socPerKm;
+  if (socAtArrivalDirect >= reservePct) return null; // chega sem parar
+
+  // Para ANTES de encostar na reserva, com folga de 5%
+  let stopKm = (socNowPct - (reservePct + 5)) / socPerKm;
+  stopKm = Math.max(3, Math.min(plan.distanceKm - 3, stopKm));
+
+  const coord = pointAhead(plan.geometry, plan.cumKm, 0, stopKm);
+  const socAtStopPct = Math.max(0, Math.round(socNowPct - stopKm * socPerKm));
+  const remainingKm = plan.distanceKm - stopKm;
+  const chargeToPct = Math.min(90, Math.max(30, Math.round(reservePct + 8 + remainingKm * socPerKm)));
+  const socAtArrivalPct = Math.max(0, Math.round(chargeToPct - remainingKm * socPerKm));
+
+  const list = await findChargers(coord, 30, 8);
+  const charger = list.find((c) => c.powerKw >= 30) ?? list[0] ?? null;
+  const power = charger?.powerKw ?? 60;
+  const effective = power >= 50 ? power * 0.85 : power * 0.9;
+  const chargeMin = Math.max(5, Math.round((((chargeToPct - socAtStopPct) / 100) * packKwh / effective) * 60));
+
+  return { km: Math.round(stopKm), coord, socAtStopPct, chargeToPct, socAtArrivalPct, chargeMin, charger };
+}
+
