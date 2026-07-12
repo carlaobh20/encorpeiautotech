@@ -64,12 +64,22 @@ function setStatus(msg, cls) { $('status').textContent = msg; $('status').classN
 
 // ---------- Supabase (opcional; falha nao bloqueia o scan) ----------
 let chan = null;
-try {
-  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
-  chan = sb.channel(CHANNEL);
-  chan.subscribe((s) => { $('vSb').textContent = s === 'SUBSCRIBED' ? 'ON' : s; });
-} catch (e) { $('vSb').textContent = 'OFF'; log('Supabase indisponivel: ' + e.message); }
+const SB_CDNS = [
+  'https://esm.sh/@supabase/supabase-js@2',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm',
+  'https://esm.run/@supabase/supabase-js@2',
+];
+for (const url of SB_CDNS) {
+  try {
+    const { createClient } = await import(url);
+    const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+    chan = sb.channel(CHANNEL);
+    chan.subscribe((s) => { $('vSb').textContent = s === 'SUBSCRIBED' ? 'ON' : s; });
+    break;
+  } catch (e) { log('Supabase falhou em ' + url + ': ' + e.message); }
+}
+if (!chan) $('vSb').textContent = 'OFF';
+
 function broadcast(payload) {
   if (!chan) return;
   try { chan.send({ type: 'broadcast', event: EVENT, payload }); } catch (e) {}
@@ -322,24 +332,68 @@ async function probeBms() {
   }
 }
 
+// Reassembla resposta UDS multi-frame por ECU (com ATH1 ligado).
+// Ex.: "7EB 10 0D 62 01 00 03 00 06 | 7EB 21 00 43 41 F4 08 40 01" -> {7EB:[62,01,00,03,00,06,00,43,41,F4,08,40,01]}
+function reassembleByEcu(resp) {
+  const toks = resp.replace(/\|/g, ' ').replace(/\r/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const ecus = {};
+  let i = 0;
+  while (i < toks.length) {
+    if (!/^7[0-9A-Fa-f]{2}$/.test(toks[i])) { i++; continue; }
+    const id = toks[i].toUpperCase();
+    const pci = parseInt(toks[i + 1], 16);
+    if (isNaN(pci)) { i++; continue; }
+    const type = (pci & 0xF0) >> 4;
+    ecus[id] = ecus[id] || [];
+    if (type === 0) {                 // single frame
+      const len = pci & 0x0F;
+      for (let k = 0; k < len; k++) if (toks[i + 2 + k]) ecus[id].push(toks[i + 2 + k]);
+      i += 2 + len;
+    } else if (type === 1) {          // first frame (2 bytes PCI + 6 dados)
+      for (let k = 0; k < 6; k++) if (toks[i + 3 + k]) ecus[id].push(toks[i + 3 + k]);
+      i += 3 + 6;
+    } else if (type === 2) {          // consecutive (1 byte PCI + 7 dados)
+      for (let k = 0; k < 7; k++) if (toks[i + 2 + k]) ecus[id].push(toks[i + 2 + k]);
+      i += 2 + 7;
+    } else { i += 2; }
+  }
+  return ecus;
+}
+
+// Extrai o payload apos "62 01 00" do ECU que tiver dados de verdade
+function payload220100(resp) {
+  const ecus = reassembleByEcu(resp);
+  for (const id in ecus) {
+    const h = ecus[id].map((x) => parseInt(x, 16));
+    if (h.length >= 10 && h[0] === 0x62 && h[1] === 0x01 && h[2] === 0x00) {
+      // ignora ECU que responde vazio (so 62 01 00 00)
+      if (h.slice(3).some((v) => v !== 0 && v !== 0xFF && v !== 0xAA)) return { id, bytes: h };
+    }
+  }
+  return null;
+}
+
 let monTimer = null;
 async function monitorTick() {
   const out = { timestamp: Date.now() };
-  const rs = await sendCmd('010D'); let b = bytesAfter(rs, '41 0D');
-  if (b && b.length) { out.speedKmh = b[0]; $('vSpeed').textContent = b[0] + ' km/h'; }
-  const rb = await sendCmd('015B'); b = bytesAfter(rb, '41 5B');
-  if (b && b.length) { out.soc = Math.round(b[0] * 1000 / 255) / 10; $('vSoc').textContent = out.soc + ' %'; }
-  const rv = await sendCmd('0142'); b = bytesAfter(rv, '41 42');
-  if (b && b.length >= 2) { out.voltage = ((b[0] << 8) + b[1]) / 1000; }
-  const ro = await sendCmd('01A6'); b = bytesAfter(ro, '41 A6');
-  if (b && b.length >= 4) { out.odometerKm = ((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]) / 10; }
+  // SoC REAL: 220100 no broadcast, byte 9 (0xF4 = SoC*2.55) confirmado no Aion
+  const r = await sendCmd('220100', 1500);
+  const pl = payload220100(r);
+  if (pl && pl.bytes.length > 9) {
+    out.soc = Math.round(pl.bytes[9] / 2.55 * 10) / 10;
+    $('vSoc').textContent = out.soc + ' %';
+  }
+  const rv = await sendCmd('ATRV', 800);
+  const mv = rv.match(/([\d.]+)V/);
+  if (mv) { out.supply12V = parseFloat(mv[1]); $('vVolt').textContent = mv[1] + ' V'; }
   broadcast(out);
 }
 function toggleMonitor() {
   if (monTimer) { clearInterval(monTimer); monTimer = null; $('btnMonitor').textContent = '3. Monitorar ao vivo'; setStatus('monitor parado', 'ok'); return; }
   $('btnMonitor').textContent = 'Parar monitor';
-  setStatus('monitorando e publicando no dashboard...', 'ok');
-  monTimer = setInterval(monitorTick, 1500);
+  setStatus('lendo SoC real e publicando no PWA...', 'ok');
+  sendCmd('ATH1'); sendCmd('ATSH7DF');
+  monTimer = setInterval(monitorTick, 2000);
 }
 
 $('btnConnect').onclick = connect;
