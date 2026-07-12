@@ -503,3 +503,271 @@ html, body {
   cursor: pointer;
 }
 .trip-history-item { cursor: pointer; }
+
+/* ============================================================
+   EXPERIENCIA UNICA — palco, busca, planejamento, navegacao, resumo
+   ============================================================ */
+
+.stage { position: fixed; inset: 0; overflow: hidden; background: var(--bg); }
+.livemap-wrap { position: absolute; inset: 0; }
+.livemap { width: 100%; height: 100%; background: #0e141b; }
+
+/* Marcos de SOC na rota (Energy Horizon) */
+.soc-badge {
+  background: var(--glass-strong);
+  border: 1.5px solid var(--teal);
+  color: var(--teal);
+  font-family: var(--font-data);
+  font-size: 11px; font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+}
+.soc-badge-arrival { border-color: var(--amber); color: var(--amber); font-size: 12px; }
+
+/* ---------- ESTADO 1: Busca ---------- */
+.search-screen { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; pointer-events: none; }
+.search-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: max(14px, env(safe-area-inset-top)) 16px 12px;
+  background: linear-gradient(180deg, rgba(11,15,20,0.9), transparent);
+  pointer-events: auto;
+}
+.search-hero {
+  margin-top: auto;
+  padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
+  background: linear-gradient(0deg, rgba(11,15,20,0.96) 55%, transparent);
+  display: flex; flex-direction: column; gap: 14px;
+  pointer-events: auto;
+}
+.search-box {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border-strong);
+  backdrop-filter: blur(var(--blur-sheet));
+  -webkit-backdrop-filter: blur(var(--blur-sheet));
+  border-radius: var(--radius-xl);
+  padding: 16px 18px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.search-icon { font-size: 18px; }
+.search-input {
+  flex: 1;
+  background: none; border: none; outline: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 19px; font-weight: 500;
+}
+.search-input::placeholder { color: var(--text-dim); }
+.search-cancel {
+  background: none; border: none; color: var(--text-faint);
+  font-size: 15px; cursor: pointer; padding: 4px;
+}
+.search-chips { display: flex; flex-wrap: wrap; gap: 9px; }
+.search-chip {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--blur-card));
+  -webkit-backdrop-filter: blur(var(--blur-card));
+  color: var(--text);
+  font-family: var(--font-data);
+  font-size: 13px; font-weight: 600;
+  padding: 11px 15px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.search-chip:active { background: rgba(255,255,255,0.1); }
+.search-chip-sub { font-size: 10px; color: var(--text-faint); font-weight: 400; }
+.search-chip-recent .search-chip-label { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-results {
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(var(--blur-sheet));
+  -webkit-backdrop-filter: blur(var(--blur-sheet));
+  padding: 8px;
+  max-height: 44vh; overflow-y: auto;
+}
+.search-results-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--text-dim);
+  padding: 6px 8px 2px;
+}
+.search-result {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text);
+  font-family: var(--font-body); font-size: 14px; text-align: left;
+  padding: 11px 8px;
+  border-radius: var(--radius-sm);
+  line-height: 1.35;
+}
+.search-result:active { background: rgba(255,255,255,0.07); }
+.search-result-sub { color: var(--text-dim); font-size: 12px; }
+.search-hint { color: var(--text-dim); font-size: 13px; padding: 10px 8px; }
+
+/* ---------- ESTADO 2: Planejamento ---------- */
+.plan-sheet {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 10;
+  background: var(--glass-strong);
+  border-top: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  backdrop-filter: blur(var(--blur-sheet));
+  -webkit-backdrop-filter: blur(var(--blur-sheet));
+  padding: 18px 20px calc(20px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 16px;
+  animation: slideUp var(--dur-base) cubic-bezier(0.32, 0.72, 0.24, 1);
+  box-shadow: 0 -12px 40px rgba(0,0,0,0.45);
+}
+.plan-head { display: flex; justify-content: space-between; align-items: flex-start; }
+.plan-route { display: flex; flex-direction: column; gap: 2px; }
+.plan-from { font-size: 12px; color: var(--text-dim); }
+.plan-arrow { color: var(--text-faint); font-size: 12px; line-height: 1; }
+.plan-to { font-family: var(--font-data); font-size: 20px; font-weight: 700; }
+.plan-loading { color: var(--text-dim); font-size: 14px; padding: 18px 0; text-align: center; }
+.plan-error { color: var(--warn); font-size: 14px; display: flex; flex-direction: column; gap: 12px; }
+.plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px 10px; }
+.plan-verdict {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; font-weight: 500;
+  padding: 13px 15px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+}
+.btn-start {
+  font-size: 16px; letter-spacing: 0.08em;
+  padding: 17px;
+  border-radius: var(--radius-md);
+}
+
+/* ---------- ESTADO 3: Navegacao ---------- */
+.nav-screen { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+.nav-screen > * { pointer-events: auto; }
+.nav-banner {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 12px; right: 12px;
+  display: flex; align-items: center; gap: 14px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border-strong);
+  backdrop-filter: blur(var(--blur-sheet));
+  -webkit-backdrop-filter: blur(var(--blur-sheet));
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+}
+.nav-arrow {
+  font-size: 34px; line-height: 1;
+  color: var(--teal);
+  font-family: var(--font-data);
+  min-width: 40px; text-align: center;
+}
+.nav-banner-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.nav-banner-l1 { font-family: var(--font-data); font-size: 19px; font-weight: 700; }
+.nav-banner-l2 {
+  font-size: 13px; color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nav-banner-right {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+  font-family: var(--font-data); font-size: 15px; font-weight: 600;
+}
+.nav-banner-dist { font-size: 12px; color: var(--text-dim); font-weight: 400; }
+
+/* Cartoes da IA */
+.ai-cards {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 84px);
+  left: 12px; right: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 11;
+}
+.ai-card {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--blur-card));
+  -webkit-backdrop-filter: blur(var(--blur-card));
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-size: 14px; font-weight: 500;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  animation: cardIn var(--dur-base) cubic-bezier(0.32, 0.72, 0.24, 1);
+}
+@keyframes cardIn { from { transform: translateY(-10px); opacity: 0; } }
+.ai-card.tone-critical { border-color: rgba(255,107,107,0.5); }
+.ai-card.tone-warn { border-color: rgba(255,176,74,0.4); }
+
+/* Energy Horizon em linha */
+.horizon-strip {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+}
+.horizon-step { display: flex; flex-direction: column; align-items: center; gap: 1px; position: relative; }
+.horizon-step:not(:last-child)::after {
+  content: '→'; position: absolute; right: -14px; top: 2px;
+  color: var(--text-faint); font-size: 11px;
+}
+.horizon-soc { font-family: var(--font-data); font-size: 15px; font-weight: 700; color: var(--teal); }
+.horizon-arrival .horizon-soc { color: var(--amber); }
+.horizon-km { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); }
+
+/* Graficos do sheet expandido */
+.charts-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.chart-box {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px 8px;
+}
+.chart-label {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--text-dim);
+  margin-bottom: 5px;
+}
+.spark { width: 100%; height: 34px; display: block; }
+.is-regen-text { color: var(--teal); }
+.nav-end { margin-top: 2px; }
+
+/* ---------- ESTADO 4: Resumo ---------- */
+.summary-eff { display: flex; align-items: baseline; }
+.summary-eff-score { font-family: var(--font-data); font-size: 34px; font-weight: 700; color: var(--good); }
+.summary-eff-max { font-family: var(--font-data); font-size: 15px; color: var(--text-dim); }
+.summary-recs { display: flex; flex-direction: column; gap: 10px; }
+.summary-recs-title {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--text-dim);
+}
+.summary-rec {
+  display: flex; gap: 12px; align-items: flex-start;
+  font-size: 13.5px; line-height: 1.45; color: var(--text);
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+.summary-rec-n {
+  font-family: var(--font-data); font-weight: 700;
+  color: var(--teal);
+  min-width: 16px;
+}
+
+/* Painel completo como overlay */
+.details-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  overflow-y: auto;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, var(--bg-glow), transparent 60%),
+    var(--bg);
+}
