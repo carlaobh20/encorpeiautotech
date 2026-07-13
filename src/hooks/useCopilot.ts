@@ -60,6 +60,9 @@ const mode = useAppStore((s) => s.mode);
 const environmentOverrides = useEnvironmentStore((s) => s.environment);
 const drivingProfile = useAppSettingsStore((s) => s.drivingProfile);
 const extraLoadKg = useAppSettingsStore((s) => s.extraLoadKg);
+// Media movel exponencial do consumo instantaneo — uma unica leitura crua
+// (freada, arrancada) nao pode mover sozinha a previsao de uma viagem de horas.
+const consumptionEmaRef = useRef<number | null>(null);
 
 return useMemo(() => {
 const environment = withUsageDefaults(environmentOverrides, drivingProfile, extraLoadKg);
@@ -67,11 +70,24 @@ const environment = withUsageDefaults(environmentOverrides, drivingProfile, extr
 let consumption = NOMINAL_WH_KM;
 let consumptionObserved = false;
 if (currentTrip && currentTrip.distanceKm > 0.8) {
+// Media cumulativa da propria viagem em curso — ja e estavel por natureza
+// (cresce com a distancia, nao com o instante), mas realimenta a EMA para
+// a leitura instantanea nao "puxar" a previsao pra longe assim que a viagem acabar.
 const netKwh = Math.max(0.05, currentTrip.energyUsedKwh - currentTrip.energyRegenKwh);
 consumption = (netKwh / currentTrip.distanceKm) * 1000;
 consumptionObserved = true;
+consumptionEmaRef.current = consumption;
 } else if (data.consumptionKwh100 !== null && data.consumptionKwh100 > 0) {
-consumption = data.consumptionKwh100 * 10;
+// Leitura instantanea (PID cru) suavizada por EMA antes de alimentar
+// EnergyHorizon/PredictionEngine — sem isso, uma frenagem ou arrancada
+// isolada faz "bateria prevista na chegada" e "kWh/100km prev." saltarem
+// 2-3x de uma leitura pra outra, mesmo com a rota identica.
+const instant = Math.max(80, data.consumptionKwh100 * 10);
+consumptionEmaRef.current =
+consumptionEmaRef.current === null
+? instant
+: consumptionEmaRef.current + 0.08 * (instant - consumptionEmaRef.current);
+consumption = consumptionEmaRef.current;
 consumptionObserved = true;
 }
 
