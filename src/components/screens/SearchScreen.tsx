@@ -8,7 +8,13 @@ import { HealthChip } from '../dashboard/HealthCard';
  * "Para onde vamos?"
  */
 
-export function SearchScreen({ onOpenDetails }: { onOpenDetails: () => void }) {
+export function SearchScreen({
+  onOpenDetails,
+  onOpenMenu,
+}: {
+  onOpenDetails: () => void;
+  onOpenMenu: () => void;
+}) {
   const chooseDestination = useAppStore((s) => s.chooseDestination);
   const places = useAppStore((s) => s.places);
   const setHome = useAppStore((s) => s.setHome);
@@ -59,7 +65,10 @@ export function SearchScreen({ onOpenDetails }: { onOpenDetails: () => void }) {
           <span className="brand-name">ENCORPEI</span>
           <span className="brand-sub">AUTO</span>
         </div>
-        <HealthChip onClick={onOpenDetails} />
+        <div className="search-header-actions">
+          <HealthChip onClick={onOpenDetails} />
+          <button className="menu-fab" onClick={onOpenMenu} aria-label="Abrir menu">☰</button>
+        </div>
       </header>
 
       <div className="search-hero">
