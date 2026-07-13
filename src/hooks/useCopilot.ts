@@ -130,7 +130,7 @@ nominalWhPerKm: NOMINAL_WH_KM,
 }, [data, currentTrip, hasTelemetrySoc, manualSoc, position, plan, progress, mode, environmentOverrides, drivingProfile, extraLoadKg]);
 }
 
-/** O tick do modo navegacao. Montar UMA vej (na NavigationScreen). */
+/** O tick do modo navegacao. Montar UMA vez (na NavigationScreen). */
 export function useNavigationLoop() {
 const mode = useAppStore((s) => s.mode);
 const offRouteTicks = useRef(0);
@@ -209,7 +209,7 @@ navigating: true,
 socPct: d.soc,
 socAtArrivalPct: socAtArrival,
 speedKmh: d.speedKmh,
-powerKw: d.powerKw,
+powerKw: d.powerKd,
 batteryTempC: d.batteryTempC,
 regenKwhTrip: trip?.energyRegenKwh ?? 0,
 consumptionWhPerKm: consumption,
