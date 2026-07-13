@@ -59,6 +59,20 @@ function zoomForSpeed(kmh: number): number {
   return 17 - (kmh / 120) * 2.6;
 }
 
+/**
+ * Deslocamento do "centro visual" da camera pra longe dos paineis de HUD
+ * (banner de navegacao no topo, sheet/painel embaixo). Sem isso, `center`
+ * aponta pro centro geometrico do viewport inteiro — e o marcador do carro
+ * pode ficar espremido/encoberto atras do banner superior, especialmente
+ * em telas de celular mais estreitas. Valores em px, aproximados a partir
+ * da altura real dos overlays de cada modo (ver styles.css).
+ */
+function cameraPadding(mode: string) {
+  if (mode === 'navigation') return { top: 170, bottom: 340, left: 0, right: 0 };
+  if (mode === 'planning') return { top: 90, bottom: 330, left: 0, right: 0 };
+  return { top: 90, bottom: 210, left: 0, right: 0 }; // search / summary / idle
+}
+
 function circlePolygon(lat: number, lng: number, radiusKm: number, points = 64): number[][] {
   const coords: number[][] = [];
   const dLat = radiusKm / 110.574;
@@ -209,7 +223,7 @@ export function LiveMap() {
     if (!carMarker.current) {
       carMarker.current = new gl.Marker({ element: carElement(), rotationAlignment: 'map' })
         .setLngLat([position.lng, position.lat]).addTo(m);
-      m.jumpTo({ center: [position.lng, position.lat], zoom: 16 });
+      m.jumpTo({ center: [position.lng, position.lat], zoom: 16, padding: cameraPadding(mode) });
     } else {
       carMarker.current.setLngLat([position.lng, position.lat]);
     }
@@ -238,6 +252,7 @@ export function LiveMap() {
     m.easeTo({
       center: [position.lng, position.lat],
       bearing, zoom, pitch,
+      padding: cameraPadding(mode),
       duration: 850, easing: (t: number) => t,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
