@@ -15,20 +15,22 @@ export interface ConfidenceFactor {
 }
 
 export interface ConfidenceReport {
-  pct: number;                       // 0..100 — honesto: máx. 96 enquanto clima/trânsito não entram
+  pct: number; // 0..100 — honesto: máx. 96 (98 com clima informado) enquanto trânsito não entra
   level: 'high' | 'medium' | 'low';
   factors: ConfidenceFactor[];
-  marginPct: number | null;          // margem sobre a reserva (do PredictionEngine)
+  marginPct: number | null; // margem sobre a reserva (do PredictionEngine)
 }
 
 export interface ConfidenceInput {
-  telemetryLive: boolean;            // SOC lido do carro (Vgate) em tempo real
-  socManual: boolean;                // SOC informado manualmente pelo motorista
+  telemetryLive: boolean; // SOC lido do carro (Vgate) em tempo real
+  socManual: boolean; // SOC informado manualmente pelo motorista
   socKnown: boolean;
-  gpsFresh: boolean;                 // posição recente e precisa
-  routeFresh: boolean;               // rota calculada/recalculada há pouco
-  consumptionObserved: boolean;      // consumo REAL medido nesta viagem
+  gpsFresh: boolean; // posição recente e precisa
+  routeFresh: boolean; // rota calculada/recalculada há pouco
+  consumptionObserved: boolean; // consumo REAL medido nesta viagem
   marginPct: number | null;
+  /** true quando o motorista informou clima/carga/vento manualmente (EnvironmentFactors ativo). */
+  climateConsidered?: boolean;
 }
 
 export function assessConfidence(i: ConfidenceInput): ConfidenceReport {
@@ -56,10 +58,16 @@ export function assessConfidence(i: ConfidenceInput): ConfidenceReport {
   else { pct += 10; factors.push({ label: 'Consumo estimado pelo perfil do veículo', state: 'warn', detail: 'melhora após ~1 km rodado' }); }
 
   // Honestidade radical: o que o modelo AINDA não considera
-  factors.push({ label: 'Clima considerado', state: 'warn', detail: 'em breve' });
+  if (i.climateConsidered) {
+    pct += 4;
+    factors.push({ label: 'Clima e carga considerados', state: 'ok' });
+  } else {
+    factors.push({ label: 'Clima considerado', state: 'warn', detail: 'informe manualmente para ativar' });
+  }
   factors.push({ label: 'Trânsito considerado', state: 'warn', detail: 'em breve' });
 
-  pct = Math.max(0, Math.min(96, Math.round(pct)));
+  const cap = i.climateConsidered ? 98 : 96;
+  pct = Math.max(0, Math.min(cap, Math.round(pct)));
   const level: ConfidenceReport['level'] = pct >= 80 ? 'high' : pct >= 55 ? 'medium' : 'low';
 
   return { pct, level, factors, marginPct: i.marginPct };
