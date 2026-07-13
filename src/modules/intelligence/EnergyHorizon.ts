@@ -2,9 +2,9 @@
  * Energy Horizon — a rota vira uma linha do tempo de energia.
  *
  * Dado o plano de rota + estado da bateria + consumo observado, produz:
- *  - marcos de SOC ao longo da rota (82% → 74% → ... → chegada 29%)
- *  - segmentos coloridos por eficiencia prevista (eco/normal/alto)
- *  - SOC previsto na chegada, coerente com o PredictionEngine
+ * - marcos de SOC ao longo da rota (82% → 74% → ... → chegada 29%)
+ * - segmentos coloridos por eficiencia prevista (eco/normal/alto)
+ * - SOC previsto na chegada, coerente com o PredictionEngine
  *
  * Modelo v1: consumo por velocidade (rolamento + aero v²) ancorado no
  * consumo observado. Elevacao e vento entram depois SEM quebrar a API.
@@ -13,6 +13,7 @@
 import type { RoutePlan } from '../navigation/NavigationEngine';
 import type { LatLng } from '../navigation/geo';
 import { consumptionAtSpeed } from './PredictionEngine';
+import { computeEnvironmentFactors, type EnvironmentInput } from './EnvironmentFactors';
 
 export type SegmentLevel = 'eco' | 'normal' | 'high';
 
@@ -25,6 +26,8 @@ export interface EnergyHorizon {
   socAtArrivalPct: number;
   energyNeededKwh: number;
   avgWhPerKm: number;
+  /** true se algum ajuste manual de ambiente (clima/carga/vento) foi aplicado a este cálculo. */
+  environmentActive: boolean;
 }
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -35,10 +38,15 @@ export function computeHorizon(
   observedWhPerKm: number,
   observedSpeedKmh: number,
   packKwh: number,
-  fromKm = 0,               // progresso atual na rota (recalcula do ponto em diante)
+  fromKm = 0, // progresso atual na rota (recalcula do ponto em diante)
   milestoneCount = 5,
+  /** Ajustes manuais de clima/carga/vento (opcional — sem isso, comportamento igual ao de sempre). */
+  environment?: EnvironmentInput,
 ): EnergyHorizon {
   const remainingKm = Math.max(0.01, plan.distanceKm - fromKm);
+
+  const env = computeEnvironmentFactors(environment, Math.max(20, observedSpeedKmh));
+  const withEnv = (baseWhPerKm: number) => Math.max(80, baseWhPerKm * env.multiplier + env.climateAddWhPerKm);
 
   // 1) Consumo previsto por trecho (usa a velocidade estimada de cada leg)
   const legs = plan.legSpeeds.filter((l) => l.toKm > fromKm);
@@ -46,7 +54,7 @@ export function computeHorizon(
   let weighted = 0;
   const legWh: { fromKm: number; toKm: number; whPerKm: number }[] = [];
   if (legs.length === 0) {
-    const wh = Math.max(80, observedWhPerKm);
+    const wh = withEnv(Math.max(80, observedWhPerKm));
     energyKwh = (wh * remainingKm) / 1000;
     weighted = wh * remainingKm;
     legWh.push({ fromKm, toKm: plan.distanceKm, whPerKm: wh });
@@ -55,7 +63,7 @@ export function computeHorizon(
       const a = Math.max(leg.fromKm, fromKm);
       const len = leg.toKm - a;
       if (len <= 0) continue;
-      const wh = consumptionAtSpeed(observedWhPerKm, Math.max(20, observedSpeedKmh), leg.speedKmh);
+      const wh = withEnv(consumptionAtSpeed(observedWhPerKm, Math.max(20, observedSpeedKmh), leg.speedKmh));
       energyKwh += (wh * len) / 1000;
       weighted += wh * len;
       legWh.push({ fromKm: a, toKm: leg.toKm, whPerKm: wh });
@@ -92,7 +100,14 @@ export function computeHorizon(
     });
   }
 
-  return { milestones, segments, socAtArrivalPct: Math.round(socAtArrivalPct), energyNeededKwh: round1(energyKwh), avgWhPerKm: Math.round(avgWhPerKm) };
+  return {
+    milestones,
+    segments,
+    socAtArrivalPct: Math.round(socAtArrivalPct),
+    energyNeededKwh: round1(energyKwh),
+    avgWhPerKm: Math.round(avgWhPerKm),
+    environmentActive: env.active,
+  };
 }
 
 function energyUpTo(legWh: { fromKm: number; toKm: number; whPerKm: number }[], fromKm: number, km: number): number {
