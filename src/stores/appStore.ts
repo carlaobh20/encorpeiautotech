@@ -1,7 +1,7 @@
 /**
  * appStore — a maquina de estados da EXPERIENCIA UNICA.
  *
- *   search → planning → navigation → summary → search
+ * search → planning → navigation → summary → search
  *
  * A tela nao muda por menu: muda por contexto. Este store e o unico
  * dono do modo atual, do destino, do plano de rota e do feed da IA.
@@ -17,6 +17,7 @@ import { AION_UT_DRIVER } from '../modules/vehicle/drivers/aion-ut';
 import type { LatLng } from '../modules/navigation/geo';
 import { useLocationStore } from './locationStore';
 import { useVehicleStore } from './vehicleStore';
+import { useEnvironmentStore } from './environmentStore';
 import { sampleBuffer } from '../modules/telemetry/SampleBuffer';
 
 export type AppMode = 'search' | 'planning' | 'navigation' | 'summary';
@@ -45,7 +46,8 @@ async function computeStopFor(plan: RoutePlan): Promise<ChargingStop | null> {
   const soc = useVehicleStore.getState().data.soc;
   if (soc === null) return null;
   const nominalWh = 1000 / AION_UT_DRIVER.nominalKmPerKwh;
-  const h = computeHorizon(plan, soc, nominalWh, 60, AION_UT_DRIVER.batteryCapacityKwh);
+  const environment = useEnvironmentStore.getState().environment;
+  const h = computeHorizon(plan, soc, nominalWh, 60, AION_UT_DRIVER.batteryCapacityKwh, 0, 5, environment);
   return planChargingStop(plan, soc, h.avgWhPerKm, AION_UT_DRIVER.batteryCapacityKwh);
 }
 
@@ -69,7 +71,7 @@ interface AppStore {
   chooseDestination: (p: Place) => Promise<void>;
   startNavigation: () => void;
   cancelPlanning: () => void;
-  endNavigation: () => void;       // chegada ou encerramento manual → summary
+  endNavigation: () => void; // chegada ou encerramento manual → summary
   closeSummary: () => void;
   setProgress: (p: NavProgress) => void;
   pushCard: (c: CopilotCard) => void;
@@ -205,4 +207,3 @@ export async function geocode(q: string): Promise<Place[]> {
     return [];
   }
 }
-
