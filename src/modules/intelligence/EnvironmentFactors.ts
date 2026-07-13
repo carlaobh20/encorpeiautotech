@@ -13,6 +13,8 @@
  * TS puro, zero React/DOM — mesmo padrão dos demais engines.
  */
 
+import { VEHICLE_MASS_KG } from '../../config/assumptions';
+
 export interface EnvironmentInput {
   outsideTempC?: number; // temperatura externa (°C)
   rain?: 'none' | 'light' | 'heavy';
@@ -53,12 +55,12 @@ export const NO_ENVIRONMENT_EFFECT: EnvironmentResult = { multiplier: 1, climate
  * Converte os inputs manuais num multiplicador + termo aditivo de consumo.
  * @param avgSpeedKmh usado só para o termo de climatização (carga fixa em kW → Wh/km depende da velocidade média)
  */
-export function computeEnvironmentFactors(i: EnvironmentInput | undefined, avgSpeedKmh = 60): EnvironmentResult {
+export function computeEnvironmentFactors(i: EnvironmentInput | undefined, avgSpeedKmh = 60, routeDistanceKm?: number): EnvironmentResult {
   if (!i) return NO_ENVIRONMENT_EFFECT;
 
   const factors: EnvironmentFactor[] = [];
   let multiplier = 1;
-  let climateAddWhPerKm = 0;
+  let additiveWhPerKm = 0; // elevacao + climatizacao somam aqui (Wh/km fixo, nao escala com aero)
   let active = false;
 
   // Temperatura: fora da faixa ideal, a bateria (resistência interna) e a
@@ -130,13 +132,25 @@ export function computeEnvironmentFactors(i: EnvironmentInput | undefined, avgSp
     });
   }
 
-  // Elevação: quem chama (EnergyHorizon) converte isso em Wh/km real por trecho;
-  // aqui só registramos o fator informativo pro checklist de confiança.
+  // Elevação: física real (E = m·g·h), distribuída pelo trecho restante da rota.
+  // Descida devolve ~65% da energia via regen (não 100% — perdas de conversão).
   if (i.elevationGainM || i.elevationLossM) {
     active = true;
-    const netM = (i.elevationGainM ?? 0) - 0.65 * (i.elevationLossM ?? 0); // descida devolve ~65% via regen
-    if (netM > 5) factors.push({ label: `Subida líquida ${Math.round(netM)}m`, effectPct: 0 });
-    else if (netM < -5) factors.push({ label: `Descida líquida ${Math.round(-netM)}m`, effectPct: 0 });
+    const netM = (i.elevationGainM ?? 0) - 0.65 * (i.elevationLossM ?? 0);
+    if (routeDistanceKm && routeDistanceKm > 0.1) {
+      const energyWh = (VEHICLE_MASS_KG * 9.81 * netM) / 3600; // J → Wh
+      const addWhPerKm = clamp(energyWh / routeDistanceKm, -200, 400); // nunca deixa a rota "voar" nem "explodir"
+      additiveWhPerKm += addWhPerKm;
+      if (Math.abs(netM) > 5) {
+        factors.push({
+          label: netM > 0 ? `Subida líquida ${Math.round(netM)}m` : `Descida líquida ${Math.round(-netM)}m`,
+          effectPct: round1((addWhPerKm / 150) * 100),
+        });
+      }
+    } else if (Math.abs(netM) > 5) {
+      // sem distância da rota (chamada fora do EnergyHorizon) — so o rotulo, sem efeito numerico
+      factors.push({ label: netM > 0 ? `Subida líquida ${Math.round(netM)}m` : `Descida líquida ${Math.round(-netM)}m`, effectPct: 0 });
+    }
   }
 
   // Climatização: carga fixa em kW (independente da aerodinâmica), então em
@@ -145,10 +159,11 @@ export function computeEnvironmentFactors(i: EnvironmentInput | undefined, avgSp
   if (i.climateOn) {
     active = true;
     const kw = i.climateIntensity === 'high' ? 2.2 : i.climateIntensity === 'low' ? 0.8 : 1.4;
-    climateAddWhPerKm = avgSpeedKmh > 3 ? (kw * 1000) / avgSpeedKmh : kw * 1000;
-    factors.push({ label: 'Ar-condicionado/aquecimento', effectPct: round1((climateAddWhPerKm / 150) * 100) });
+    const climateWhPerKm = avgSpeedKmh > 3 ? (kw * 1000) / avgSpeedKmh : kw * 1000;
+    additiveWhPerKm += climateWhPerKm;
+    factors.push({ label: 'Ar-condicionado/aquecimento', effectPct: round1((climateWhPerKm / 150) * 100) });
   }
 
   multiplier = clamp(multiplier, 0.7, 2.2); // nunca deixa a previsão explodir
-  return { multiplier: round2(multiplier), climateAddWhPerKm: Math.round(climateAddWhPerKm), factors, active };
+  return { multiplier: round2(multiplier), climateAddWhPerKm: Math.round(additiveWhPerKm), factors, active };
 }
