@@ -37,6 +37,11 @@ export const USER_NAME = 'Carlos';
 /** Fator rota real vs linha reta quando nao ha rota calculada. */
 export const ROAD_FACTOR = 1.25;
 
+/** Massa aproximada do veiculo + motorista/carga padrao (kg) — usada no calculo
+ * fisico de energia de subida/descida (elevacao). Premissa: hatch/SUV compacto
+ * eletrico tipico (ex.: GAC Aion UT). [Palpite] ajustavel quando tivermos peso real do veiculo. */
+export const VEHICLE_MASS_KG = 1750;
+
 export function applyAppSettings(
   patch: Partial<{
     reserveSocPct: number;
