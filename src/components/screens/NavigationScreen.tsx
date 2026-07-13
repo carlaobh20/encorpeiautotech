@@ -111,12 +111,12 @@ return (
 </div>
 <div className="nav-battery-hint">Ajuste manual em tempo real</div>
 </div>
-)}�
+)}
 
 <div className="nav-bottom-panel">
 <div className="nav-split">
 <div className="nav-split-col">
-<span className="nav-split-icon">🔋</cpan>
+<span className="nav-split-icon">🔋</span>
 <span className="nav-split-label">BATERIA ATUAL</span>
 <span className="nav-split-value">{data.soc !== null ? Math.round(data.soc) : '—'}%</span>
 <span className="nav-split-sub">Autonomia estimada<br />{rangeNowKm !== null ? rangeNowKm + ' km' : '—'}</span>
