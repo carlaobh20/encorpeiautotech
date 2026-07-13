@@ -668,6 +668,13 @@ html, body {
   margin-right: 7px;
   vertical-align: middle;
 }
+.plan-cost-note {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  margin-top: -6px;
+}
 .btn-start {
   font-size: 16px; letter-spacing: 0.08em;
   padding: 17px;
