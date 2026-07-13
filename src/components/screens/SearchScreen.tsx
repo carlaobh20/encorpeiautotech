@@ -6,6 +6,10 @@ import { HealthChip } from '../dashboard/HealthCard';
 /**
  * ESTADO 1 — Sem destino. Uma pergunta, nada de sensores:
  * "Para onde vamos?"
+ *
+ * Sem chips de Casa/Trabalho/recentes por pedido do Carlos — a tela
+ * inicial nao expoe enderecos salvos. O botao do menu lateral saiu do
+ * header e virou um FAB fixo no canto inferior direito.
  */
 
 export function SearchScreen({
@@ -16,9 +20,6 @@ export function SearchScreen({
   onOpenMenu: () => void;
 }) {
   const chooseDestination = useAppStore((s) => s.chooseDestination);
-  const places = useAppStore((s) => s.places);
-  const setHome = useAppStore((s) => s.setHome);
-  const setWork = useAppStore((s) => s.setWork);
   const loadChargersNear = useAppStore((s) => s.loadChargersNear);
   const chargers = useAppStore((s) => s.chargers);
   const chargersLoading = useAppStore((s) => s.chargersLoading);
@@ -28,7 +29,6 @@ export function SearchScreen({
   const [results, setResults] = useState<Place[]>([]);
   const [searching, setSearching] = useState(false);
   const [showChargers, setShowChargers] = useState(false);
-  const [pendingSave, setPendingSave] = useState<'home' | 'work' | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -43,8 +43,6 @@ export function SearchScreen({
   }, [q]);
 
   function pick(p: Place) {
-    if (pendingSave === 'home') { setHome(p); setPendingSave(null); setQ(''); setResults([]); return; }
-    if (pendingSave === 'work') { setWork(p); setPendingSave(null); setQ(''); setResults([]); return; }
     chooseDestination(p);
   }
 
@@ -65,23 +63,21 @@ export function SearchScreen({
           <span className="brand-name">ENCORPEI</span>
           <span className="brand-sub">AUTO</span>
         </div>
-        <div className="search-header-actions">
-          <HealthChip onClick={onOpenDetails} />
-          <button className="menu-fab" onClick={onOpenMenu} aria-label="Abrir menu">☰</button>
-        </div>
+        <HealthChip onClick={onOpenDetails} />
       </header>
+
+      <button className="menu-fab" onClick={onOpenMenu} aria-label="Abrir menu">☰</button>
 
       <div className="search-hero">
         <div className="search-box">
           <span className="search-icon">🔍</span>
           <input
             className="search-input"
-            placeholder={pendingSave ? 'Buscar endereço de ' + (pendingSave === 'home' ? 'casa' : 'trabalho') + '…' : 'Para onde vamos?'}
+            placeholder="Para onde vamos?"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             autoComplete="off"
           />
-          {pendingSave && <button className="search-cancel" onClick={() => { setPendingSave(null); setQ(''); }}>✕</button>}
         </div>
 
         {q.trim().length >= 3 && (
@@ -99,22 +95,10 @@ export function SearchScreen({
 
         {q.trim().length < 3 && !showChargers && (
           <div className="search-chips">
-            {places.home
-              ? chip('Casa', '🏠', () => chooseDestination(places.home!))
-              : chip('Casa', '🏠', () => setPendingSave('home'), 'definir')}
-            {places.work
-              ? chip('Trabalho', '💼', () => chooseDestination(places.work!))
-              : chip('Trabalho', '💼', () => setPendingSave('work'), 'definir')}
             {chip('Carregadores', '⚡', () => {
               setShowChargers(true);
               if (position) loadChargersNear({ lat: position.lat, lng: position.lng });
             })}
-            {places.recents.map((r, i) => (
-              <button key={'r' + i} className="search-chip search-chip-recent" onClick={() => chooseDestination(r)}>
-                <span className="search-chip-icon">🕓</span>
-                <span className="search-chip-label">{r.name.split(',')[0]}</span>
-              </button>
-            ))}
           </div>
         )}
 
