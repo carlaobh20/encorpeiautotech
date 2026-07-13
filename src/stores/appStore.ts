@@ -18,6 +18,7 @@ import type { LatLng } from '../modules/navigation/geo';
 import { useLocationStore } from './locationStore';
 import { useVehicleStore } from './vehicleStore';
 import { useEnvironmentStore } from './environmentStore';
+import { useAutoEnvironmentStore } from './autoEnvironmentStore';
 import { sampleBuffer } from '../modules/telemetry/SampleBuffer';
 
 export type AppMode = 'search' | 'planning' | 'navigation' | 'summary';
@@ -46,7 +47,7 @@ async function computeStopFor(plan: RoutePlan): Promise<ChargingStop | null> {
   const soc = useVehicleStore.getState().data.soc;
   if (soc === null) return null;
   const nominalWh = 1000 / AION_UT_DRIVER.nominalKmPerKwh;
-  const environment = useEnvironmentStore.getState().environment;
+      const environment = { ...useAutoEnvironmentStore.getState().auto, ...useEnvironmentStore.getState().environment };
   const h = computeHorizon(plan, soc, nominalWh, 60, AION_UT_DRIVER.batteryCapacityKwh, 0, 5, environment);
   return planChargingStop(plan, soc, h.avgWhPerKm, AION_UT_DRIVER.batteryCapacityKwh);
 }
@@ -116,6 +117,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       computeStopFor(plan)
         .then((stop) => { if (get().plan === plan) set({ chargingStop: stop }); })
         .catch(() => { /* sem parada calculavel: timeline segue sem parada */ });
+      // elevacao + clima reais (Open-Elevation/Open-Meteo), best-effort;
+      useAutoEnvironmentStore.getState().fetchForRoute(plan)
+      .then(() => { if (get().plan === plan) get().refreshEnergyPlan(); })
+      .catch(() => {});
     } catch (e: any) {
       set({ planning: false, planError: e?.message ?? 'Não foi possível calcular a rota.' });
     }
@@ -141,7 +146,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  cancelPlanning: () => set({ mode: 'search', destination: null, plan: null, planError: null, chargingStop: null }),
+      cancelPlanning: () => { useAutoEnvironmentStore.getState().clear(); set({ mode: 'search', destination: null, plan: null, planError: null, chargingStop: null }); },
 
   endNavigation: () => {
     driveSim.stop();
@@ -151,6 +156,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   closeSummary: () => {
     useVehicleStore.getState().closeSummary();
+    useAutoEnvironmentStore.getState().clear();
     set({ mode: 'search', destination: null, plan: null, progress: null, chargingStop: null, socAtNavStart: null });
   },
 
