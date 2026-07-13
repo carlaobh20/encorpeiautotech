@@ -1,17 +1,30 @@
 import { useEffect, useState } from 'react';
 import { useVehicleStore } from '../../stores/vehicleStore';
 import { useVehicleProfileStore } from '../../stores/vehicleProfileStore';
+import { useAppSettingsStore } from '../../stores/appSettingsStore';
 
 /**
  * Menu Lateral — centro de configuração do app.
  *
- * Fatia vertical validando o padrão (Supabase + autosave debounced +
- * recálculo imediato) numa categoria só: "Meu veículo". As demais
- * linhas do mockup aparecem — a estrutura completa fica visível —
- * mas abrem um aviso honesto de "em breve" em vei de fingir função.
+ * "Meu veículo", "Consumo e bateria" e "Carregamento" são reais: cada
+ * campo lê/escreve no Supabase (autosave debounced) e alimenta direto o
+ * cálculo do copiloto — não são só texto guardado sem efeito. As demais
+ * linhas do mockup aparecem — a estrutura completa fica visível — mas
+ * abrem um aviso honesto de "em breve" em vez de fingir função. Nenhuma
+ * delas foi construída ainda porque cada uma exige ou uma decisão de
+ * produto que só o Carlos pode tomar (ex: o que "Backup e sincronização"
+ * deve fazer de fato) ou infraestrutura que o app não tem hoje (ex:
+ * notificações push).
  */
 
-type View = 'menu' | 'meu-veiculo' | 'sobre' | 'em-breve';
+type View =
+  | 'menu'
+  | 'meu-veiculo'
+  | 'consumo-bateria'
+  | 'carregamento'
+  | 'ajuda'
+  | 'sobre'
+  | 'em-breve';
 
 interface MenuItem {
   label: string;
@@ -28,8 +41,8 @@ const CATEGORIES: MenuCategory[] = [
     title: 'Planejamento',
     items: [
       { label: 'Planejamento de rota', view: 'em-breve' },
-      { label: 'Carregamento', view: 'em-breve' },
-      { label: 'Consumo e bateria', view: 'em-breve' },
+      { label: 'Carregamento', view: 'carregamento' },
+      { label: 'Consumo e bateria', view: 'consumo-bateria' },
     ],
   },
   {
@@ -59,7 +72,7 @@ const CATEGORIES: MenuCategory[] = [
   {
     title: '',
     items: [
-      { label: 'Ajuda e suporte', view: 'em-breve' },
+      { label: 'Ajuda e suporte', view: 'ajuda' },
       { label: 'Sobre o app', view: 'sobre' },
     ],
   },
@@ -124,6 +137,9 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
             ))}
 
           {view === 'meu-veiculo' && <MeuVeiculoView onBack={() => setView('menu')} />}
+          {view === 'consumo-bateria' && <ConsumoBateriaView onBack={() => setView('menu')} />}
+          {view === 'carregamento' && <CarregamentoView onBack={() => setView('menu')} />}
+          {view === 'ajuda' && <AjudaView onBack={() => setView('menu')} />}
           {view === 'sobre' && <SobreView onBack={() => setView('menu')} />}
           {view === 'em-breve' && <EmBreveView label={pendingLabel} onBack={() => setView('menu')} />}
         </div>
@@ -160,6 +176,23 @@ function SobreView({ onBack }: { onBack: () => void }) {
         Telemetria via Vehicle Gateway · GAC Aion UT + Vgate iCar Pro.
         <br />
         ?source=mock para demonstração sem carro.
+      </p>
+    </div>
+  );
+}
+
+function AjudaView({ onBack }: { onBack: () => void }) {
+  return (
+    <div>
+      <BackRow onBack={onBack} title="Ajuda e suporte" />
+      <p className="side-menu-about">
+        Dúvida ou algo quebrou? Fale direto com o Carlos pelo e-mail
+        carloshenriqueferro@gmail.com descrevendo o que aconteceu — se
+        possível com um print da tela.
+      </p>
+      <p className="side-menu-note">
+        Ainda não existe um canal de suporte dedicado dentro do app (chat,
+        base de artigos etc.) — por enquanto é contato direto mesmo.
       </p>
     </div>
   );
@@ -221,3 +254,96 @@ function MeuVeiculoView({ onBack }: { onBack: () => void }) {
   );
 }
 
+function ConsumoBateriaView({ onBack }: { onBack: () => void }) {
+  const reserveSocPct = useAppSettingsStore((s) => s.reserveSocPct);
+  const saving = useAppSettingsStore((s) => s.saving);
+  const loaded = useAppSettingsStore((s) => s.loaded);
+  const update = useAppSettingsStore((s) => s.update);
+
+  return (
+    <div>
+      <BackRow onBack={onBack} title="Consumo e bateria" />
+      {!loaded && <p className="side-menu-empty">Carregando…</p>}
+
+      <div className="side-menu-field">
+        <label>Reserva mínima de bateria (%)</label>
+        <input
+          className="side-menu-input"
+          type="number"
+          min={0}
+          max={40}
+          step={1}
+          value={reserveSocPct}
+          onChange={(e) => update({ reserveSocPct: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="side-menu-save-hint">{saving ? 'Salvando…' : 'Salvo automaticamente'}</div>
+      <p className="side-menu-note">
+        É a % de bateria que o copiloto trata como intocável — abaixo disso ele avisa que é preciso
+        recarregar. Vale pro planejamento de rota e pro alerta durante a navegação.
+      </p>
+    </div>
+  );
+}
+
+function CarregamentoView({ onBack }: { onBack: () => void }) {
+  const energyTariffBrlKwh = useAppSettingsStore((s) => s.energyTariffBrlKwh);
+  const gasPriceBrlL = useAppSettingsStore((s) => s.gasPriceBrlL);
+  const gasKmPerL = useAppSettingsStore((s) => s.gasKmPerL);
+  const saving = useAppSettingsStore((s) => s.saving);
+  const loaded = useAppSettingsStore((s) => s.loaded);
+  const update = useAppSettingsStore((s) => s.update);
+
+  return (
+    <div>
+      <BackRow onBack={onBack} title="Carregamento" />
+      {!loaded && <p className="side-menu-empty">Carregando…</p>}
+
+      <div className="side-menu-field">
+        <label>Tarifa de energia (R$/kWh)</label>
+        <input
+          className="side-menu-input"
+          type="number"
+          min={0}
+          max={5}
+          step={0.01}
+          value={energyTariffBrlKwh}
+          onChange={(e) => update({ energyTariffBrlKwh: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="side-menu-field">
+        <label>Preço da gasolina (R$/L)</label>
+        <input
+          className="side-menu-input"
+          type="number"
+          min={0}
+          max={15}
+          step={0.01}
+          value={gasPriceBrlL}
+          onChange={(e) => update({ gasPriceBrlL: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="side-menu-field">
+        <label>Consumo do carro a gasolina (km/L)</label>
+        <input
+          className="side-menu-input"
+          type="number"
+          min={1}
+          max={30}
+          step={0.1}
+          value={gasKmPerL}
+          onChange={(e) => update({ gasKmPerL: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="side-menu-save-hint">{saving ? 'Salvando…' : 'Salvo automaticamente'}</div>
+      <p className="side-menu-note">
+        Usados no resumo de viagem pra calcular quanto você gastou de energia e quanto teria gasto
+        com um carro a combustão equivalente.
+      </p>
+    </div>
+  );
+}
