@@ -24,6 +24,7 @@ export interface EnvironmentInput {
   climateIntensity?: 'low' | 'medium' | 'high';
   elevationGainM?: number; // subida acumulada no trecho (m)
   elevationLossM?: number; // descida acumulada no trecho (m)
+  drivingProfile?: 'eco' | 'normal' | 'esportivo'; // estilo de conducao (Menu > Perfil de conducao); 'normal' nunca chega aqui (sem efeito)
 }
 
 export interface EnvironmentFactor {
@@ -115,6 +116,18 @@ export function computeEnvironmentFactors(i: EnvironmentInput | undefined, avgSp
     active = true;
     multiplier *= 1.45;
     factors.push({ label: 'Reboque', effectPct: 45 });
+  }
+
+  // Perfil de conducao: eco reduz consumo (aceleracao suave, regen aproveitado),
+  // esportivo aumenta (aceleracoes fortes, velocidade media mais alta). 'normal' = sem efeito.
+  if (i.drivingProfile && i.drivingProfile !== 'normal') {
+    active = true;
+    const effect = i.drivingProfile === 'eco' ? -10 : 15;
+    multiplier *= 1 + effect / 100;
+    factors.push({
+      label: i.drivingProfile === 'eco' ? 'Perfil econômico' : 'Perfil esportivo',
+      effectPct: round1(effect),
+    });
   }
 
   // Elevação: quem chama (EnergyHorizon) converte isso em Wh/km real por trecho;
