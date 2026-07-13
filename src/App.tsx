@@ -31,6 +31,7 @@ export default function App() {
   const startWatch = useLocationStore((s) => s.startWatch);
   const loadVehicleProfile = useVehicleProfileStore((s) => s.load);
   const loadAppSettings = useAppSettingsStore((s) => s.load);
+  const themeAccent = useAppSettingsStore((s) => s.themeAccent);
   const mode = useAppStore((s) => s.mode);
   const [details, setDetails] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -41,6 +42,13 @@ export default function App() {
     void loadVehicleProfile();
     void loadAppSettings();
   }, [connect, startWatch, loadVehicleProfile, loadAppSettings]);
+
+  // Aparencia (Menu Lateral): --teal e a cor de destaque em todo o app (design/tokens.ts
+  // documenta isso como injecao em runtime), entao trocar essa unica variavel CSS
+  // já propaga pra botões, ícones e indicadores positivos sem tocar em cada componente.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--teal', themeAccent);
+  }, [themeAccent]);
 
   return (
     <>
