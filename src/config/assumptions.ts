@@ -22,6 +22,15 @@ export let GAS_KM_PER_L = 11.5;
 /** Reserva de bateria que o copiloto trata como intocavel (%). Editavel em Menu > Consumo e bateria. */
 export let RESERVE_SOC_PCT = 10;
 
+/** Perfil de conducao (multiplicador de consumo). Editavel em Menu > Perfil de conducao. */
+export let DRIVING_PROFILE: 'eco' | 'normal' | 'esportivo' = 'normal';
+
+/** Carga extra media assumida (kg): passageiros/bagagem alem do padrao de 1 pessoa. Editavel em Menu > Uso do veiculo. */
+export let EXTRA_LOAD_KG = 0;
+
+/** Cor de destaque do app (var(--teal) injetada em runtime). Editavel em Menu > Aparencia. */
+export let THEME_ACCENT = '#3ddcc4';
+
 /** Nome de exibicao do usuario nos cartoes da IA (futuro: perfil). */
 export const USER_NAME = 'Carlos';
 
@@ -34,10 +43,16 @@ export function applyAppSettings(
     energyTariffBrlKwh: number;
     gasPriceBrlL: number;
     gasKmPerL: number;
+    drivingProfile: 'eco' | 'normal' | 'esportivo';
+    extraLoadKg: number;
+    themeAccent: string;
   }>
 ) {
   if (patch.reserveSocPct !== undefined) RESERVE_SOC_PCT = patch.reserveSocPct;
   if (patch.energyTariffBrlKwh !== undefined) ENERGY_TARIFF_BRL_KWH = patch.energyTariffBrlKwh;
   if (patch.gasPriceBrlL !== undefined) GAS_PRICE_BRL_L = patch.gasPriceBrlL;
   if (patch.gasKmPerL !== undefined) GAS_KM_PER_L = patch.gasKmPerL;
+  if (patch.drivingProfile !== undefined) DRIVING_PROFILE = patch.drivingProfile;
+  if (patch.extraLoadKg !== undefined) EXTRA_LOAD_KG = patch.extraLoadKg;
+  if (patch.themeAccent !== undefined) THEME_ACCENT = patch.themeAccent;
 }
