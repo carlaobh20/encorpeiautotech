@@ -78,6 +78,8 @@ interface AppStore {
   expireCards: () => void;
   setHome: (p: Place) => void;
   setWork: (p: Place) => void;
+  /** Adiciona/remove um lugar dos favoritos (persistido em localStorage, mesma chave dos demais lugares salvos). */
+  toggleFavorite: (p: Place) => void;
   loadChargersNear: (at: LatLng) => Promise<void>;
   /** Recalcula a parada de recarga (ex.: motorista ajustou o SOC no slider). */
   refreshEnergyPlan: () => Promise<void>;
@@ -169,6 +171,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setWork: (p) => {
     const places = { ...get().places, work: p };
     savePlaces(places); set({ places });
+  },
+
+  toggleFavorite: (p) => {
+    const places = { ...get().places };
+    const exists = places.favorites.some((f) => f.name === p.name);
+    places.favorites = exists
+      ? places.favorites.filter((f) => f.name !== p.name)
+      : [p, ...places.favorites].slice(0, 30);
+    savePlaces(places);
+    set({ places });
   },
 
   loadChargersNear: async (at) => {
