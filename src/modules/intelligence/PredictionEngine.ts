@@ -8,13 +8,17 @@
  * TS puro, zero React/DOM: roda igual no PWA hoje e no app nativo amanha.
  */
 
+import { computeEnvironmentFactors, type EnvironmentInput, type EnvironmentFactor } from './EnvironmentFactors';
+
 export interface PredictionInput {
-  socPct: number;                    // SOC atual (0..100)
-  packUsableKwh: number;             // capacidade util do pack (kWh)
-  distanceRemainingKm: number;       // distancia ate o destino
-  recentConsumptionWhPerKm: number;  // consumo recente medido (Wh/km)
-  speedKmh: number;                  // velocidade atual
-  reserveSocPct?: number;            // margem intocavel (default 10%)
+  socPct: number; // SOC atual (0..100)
+  packUsableKwh: number; // capacidade util do pack (kWh)
+  distanceRemainingKm: number; // distancia ate o destino
+  recentConsumptionWhPerKm: number; // consumo recente medido (Wh/km)
+  speedKmh: number; // velocidade atual
+  reserveSocPct?: number; // margem intocavel (default 10%)
+  /** Ajustes manuais de clima/carga/vento (opcional — sem isso, comportamento igual ao de sempre). */
+  environment?: EnvironmentInput;
 }
 
 export type PredictionStatus = 'ok' | 'tight' | 'insufficient';
@@ -25,10 +29,14 @@ export interface Prediction {
   energyNeededKwh: number;
   energyAvailableKwh: number;
   etaMinutes: number | null;
-  marginPct: number;                 // socAtArrival - reserva
+  marginPct: number; // socAtArrival - reserva
   status: PredictionStatus;
   needsCharge: boolean;
   confidence: Confidence;
+  /** true se algum ajuste manual de ambiente (clima/carga/vento) foi informado. */
+  environmentActive: boolean;
+  /** Fatores que compuseram o ajuste ambiental — para exibir no checklist de confiança. */
+  environmentFactors: EnvironmentFactor[];
 }
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -49,7 +57,9 @@ export function consumptionAtSpeed(observedWhPerKm: number, observedSpeedKmh: nu
 
 export function predict(i: PredictionInput): Prediction {
   const reserve = i.reserveSocPct ?? 10;
-  const consumption = Math.max(MIN_WH_PER_KM, i.recentConsumptionWhPerKm);
+  const env = computeEnvironmentFactors(i.environment, Math.max(20, i.speedKmh));
+  const baseConsumption = Math.max(MIN_WH_PER_KM, i.recentConsumptionWhPerKm);
+  const consumption = Math.max(MIN_WH_PER_KM, baseConsumption * env.multiplier + env.climateAddWhPerKm);
   const energyNeededKwh = (consumption * i.distanceRemainingKm) / 1000;
   const energyAvailableKwh = (i.socPct / 100) * i.packUsableKwh;
   const socUsedPct = i.packUsableKwh > 0 ? (energyNeededKwh / i.packUsableKwh) * 100 : 100;
@@ -73,6 +83,8 @@ export function predict(i: PredictionInput): Prediction {
     status,
     needsCharge: status === 'insufficient' || socAtArrivalPct < reserve,
     confidence,
+    environmentActive: env.active,
+    environmentFactors: env.factors,
   };
 }
 
