@@ -30,3 +30,17 @@ export const AION_UT_DRIVER: VehicleDriver = {
     odometerKm: null,     // TODO pós-teste (PID 01 A6 se suportado)
   },
 };
+
+/**
+ * Menu Lateral → "Meu veículo" persiste no Supabase e chama isto pra
+ * atualizar o driver em uso. Mutação intencional do objeto exportado
+ * acima: assim os ~7 arquivos que já leem AION_UT_DRIVER.xxx (appStore,
+ * SummaryScreen, NavigationScreen, MockAionDataSource, useCopilot,
+ * LiveMap) continuam funcionando sem nenhuma alteração — só passam a
+ * ler o valor editado pelo usuário na próxima leitura.
+ */
+export function applyVehicleProfile(
+  patch: Partial<Pick<VehicleDriver, 'displayName' | 'batteryCapacityKwh' | 'nominalKmPerKwh'>>
+) {
+  Object.assign(AION_UT_DRIVER, patch);
+}
