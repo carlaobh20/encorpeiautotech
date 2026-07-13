@@ -6,15 +6,15 @@ import { useAppSettingsStore } from '../../stores/appSettingsStore';
 /**
  * Menu Lateral — centro de configuração do app.
  *
- * "Meu veículo", "Consumo e bateria" e "Carregamento" são reais: cada
- * campo lê/escreve no Supabase (autosave debounced) e alimenta direto o
- * cálculo do copiloto — não são só texto guardado sem efeito. As demais
- * linhas do mockup aparecem — a estrutura completa fica visível — mas
- * abrem um aviso honesto de "em breve" em vez de fingir função. Nenhuma
- * delas foi construída ainda porque cada uma exige ou uma decisão de
- * produto que só o Carlos pode tomar (ex: o que "Backup e sincronização"
- * deve fazer de fato) ou infraestrutura que o app não tem hoje (ex:
- * notificações push).
+ * "Meu veículo", "Consumo e bateria", "Carregamento", "Perfil de condução",
+ * "Uso do veículo" e "Aparência" são reais: cada campo lê/escreve no
+ * Supabase (autosave debounced) e alimenta direto o cálculo do copiloto —
+ * não são só texto guardado sem efeito. As demais linhas do mockup
+ * aparecem — a estrutura completa fica visível — mas abrem um aviso
+ * honesto de "em breve" em vez de fingir função. Nenhuma delas foi
+ * construída ainda porque cada uma exige ou uma decisão de produto que só
+ * o Carlos pode tomar (ex: o que "Backup e sincronização" deve fazer de
+ * fato) ou infraestrutura que o app não tem hoje (ex: notificações push).
  */
 
 type View =
@@ -22,6 +22,9 @@ type View =
   | 'meu-veiculo'
   | 'consumo-bateria'
   | 'carregamento'
+  | 'perfil-conducao'
+  | 'uso-veiculo'
+  | 'aparencia'
   | 'ajuda'
   | 'sobre'
   | 'em-breve';
@@ -49,8 +52,8 @@ const CATEGORIES: MenuCategory[] = [
     title: 'Veículo',
     items: [
       { label: 'Meu veículo', view: 'meu-veiculo' },
-      { label: 'Perfil de condução', view: 'em-breve' },
-      { label: 'Uso do veículo', view: 'em-breve' },
+      { label: 'Perfil de condução', view: 'perfil-conducao' },
+      { label: 'Uso do veículo', view: 'uso-veiculo' },
     ],
   },
   {
@@ -66,7 +69,7 @@ const CATEGORIES: MenuCategory[] = [
     items: [
       { label: 'Unidades e idioma', view: 'em-breve' },
       { label: 'Notificações', view: 'em-breve' },
-      { label: 'Aparência', view: 'em-breve' },
+      { label: 'Aparência', view: 'aparencia' },
     ],
   },
   {
@@ -139,6 +142,9 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
           {view === 'meu-veiculo' && <MeuVeiculoView onBack={() => setView('menu')} />}
           {view === 'consumo-bateria' && <ConsumoBateriaView onBack={() => setView('menu')} />}
           {view === 'carregamento' && <CarregamentoView onBack={() => setView('menu')} />}
+          {view === 'perfil-conducao' && <PerfilConducaoView onBack={() => setView('menu')} />}
+          {view === 'uso-veiculo' && <UsoVeiculoView onBack={() => setView('menu')} />}
+          {view === 'aparencia' && <AparenciaView onBack={() => setView('menu')} />}
           {view === 'ajuda' && <AjudaView onBack={() => setView('menu')} />}
           {view === 'sobre' && <SobreView onBack={() => setView('menu')} />}
           {view === 'em-breve' && <EmBreveView label={pendingLabel} onBack={() => setView('menu')} />}
@@ -343,6 +349,142 @@ function CarregamentoView({ onBack }: { onBack: () => void }) {
       <p className="side-menu-note">
         Usados no resumo de viagem pra calcular quanto você gastou de energia e quanto teria gasto
         com um carro a combustão equivalente.
+      </p>
+    </div>
+  );
+}
+
+const DRIVING_PROFILES: { value: 'eco' | 'normal' | 'esportivo'; label: string; hint: string }[] = [
+  { value: 'eco', label: 'Eco', hint: '−10% consumo' },
+  { value: 'normal', label: 'Normal', hint: 'sem ajuste' },
+  { value: 'esportivo', label: 'Esportivo', hint: '+15% consumo' },
+];
+
+function PerfilConducaoView({ onBack }: { onBack: () => void }) {
+  const drivingProfile = useAppSettingsStore((s) => s.drivingProfile);
+  const saving = useAppSettingsStore((s) => s.saving);
+  const loaded = useAppSettingsStore((s) => s.loaded);
+  const update = useAppSettingsStore((s) => s.update);
+
+  return (
+    <div>
+      <BackRow onBack={onBack} title="Perfil de condução" />
+      {!loaded && <p className="side-menu-empty">Carregando…</p>}
+
+      <div className="side-menu-field">
+        <label>Estilo de condução</label>
+        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          {DRIVING_PROFILES.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => update({ drivingProfile: p.value })}
+              style={{
+                flex: 1,
+                padding: '10px 6px',
+                borderRadius: 12,
+                border: drivingProfile === p.value ? '1px solid var(--teal)' : '1px solid var(--glass-border)',
+                background: drivingProfile === p.value ? 'rgba(61,220,196,0.12)' : 'var(--glass)',
+                color: 'var(--text)',
+                cursor: 'pointer',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ fontWeight: 600 }}>{p.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{p.hint}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="side-menu-save-hint">{saving ? 'Salvando…' : 'Salvo automaticamente'}</div>
+      <p className="side-menu-note">
+        Ajusta a previsão de consumo pro seu jeito de dirigir — eco assume aceleração suave e uso
+        eficiente da regeneração; esportivo assume acelerações mais fortes e velocidade média mais alta.
+        Se você ajustar carga/clima manualmente numa viagem específica, esse ajuste manual manda mais
+        que o perfil padrão.
+      </p>
+    </div>
+  );
+}
+
+function UsoVeiculoView({ onBack }: { onBack: () => void }) {
+  const extraLoadKg = useAppSettingsStore((s) => s.extraLoadKg);
+  const saving = useAppSettingsStore((s) => s.saving);
+  const loaded = useAppSettingsStore((s) => s.loaded);
+  const update = useAppSettingsStore((s) => s.update);
+
+  return (
+    <div>
+      <BackRow onBack={onBack} title="Uso do veículo" />
+      {!loaded && <p className="side-menu-empty">Carregando…</p>}
+
+      <div className="side-menu-field">
+        <label>Carga extra média (kg)</label>
+        <input
+          className="side-menu-input"
+          type="number"
+          min={0}
+          max={400}
+          step={5}
+          value={extraLoadKg}
+          onChange={(e) => update({ extraLoadKg: Number(e.target.value) })}
+        />
+      </div>
+
+      <div className="side-menu-save-hint">{saving ? 'Salvando…' : 'Salvo automaticamente'}</div>
+      <p className="side-menu-note">
+        Peso médio de passageiros/bagagem além de 1 pessoa, no seu uso normal do carro (ex.: família,
+        equipamento de trabalho). Entra como padrão em toda previsão — numa viagem específica com carga
+        diferente, ajuste na tela de planejamento em vez de mudar aqui.
+      </p>
+    </div>
+  );
+}
+
+const ACCENT_PRESETS = ['#3ddcc4', '#7fb4ff', '#ffb04a', '#c792ea', '#ff6b9d'];
+
+function AparenciaView({ onBack }: { onBack: () => void }) {
+  const themeAccent = useAppSettingsStore((s) => s.themeAccent);
+  const saving = useAppSettingsStore((s) => s.saving);
+  const loaded = useAppSettingsStore((s) => s.loaded);
+  const update = useAppSettingsStore((s) => s.update);
+
+  return (
+    <div>
+      <BackRow onBack={onBack} title="Aparência" />
+      {!loaded && <p className="side-menu-empty">Carregando…</p>}
+
+      <div className="side-menu-field">
+        <label>Cor de destaque</label>
+        <div style={{ display: 'flex', gap: 10, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {ACCENT_PRESETS.map((c) => (
+            <button
+              key={c}
+              onClick={() => update({ themeAccent: c })}
+              aria-label={'Cor ' + c}
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: '50%',
+                background: c,
+                border: themeAccent.toLowerCase() === c.toLowerCase() ? '3px solid var(--text)' : '2px solid var(--glass-border)',
+                cursor: 'pointer',
+              }}
+            />
+          ))}
+          <input
+            type="color"
+            value={themeAccent}
+            onChange={(e) => update({ themeAccent: e.target.value })}
+            style={{ width: 34, height: 34, border: 'none', background: 'none', cursor: 'pointer' }}
+            aria-label="Cor personalizada"
+          />
+        </div>
+      </div>
+
+      <div className="side-menu-save-hint">{saving ? 'Salvando…' : 'Salvo automaticamente'}</div>
+      <p className="side-menu-note">
+        Muda a cor de destaque usada em botões, ícones e indicadores positivos no app inteiro.
       </p>
     </div>
   );
