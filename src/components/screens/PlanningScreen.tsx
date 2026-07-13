@@ -1,8 +1,13 @@
+import { useEffect, useState } from 'react';
 import { useVehicleStore } from '../../stores/vehicleStore';
 import { useAppStore } from '../../stores/appStore';
+import { useAppSettingsStore } from '../../stores/appSettingsStore';
+import { useEnvironmentStore } from '../../stores/environmentStore';
 import { useCopilot } from '../../hooks/useCopilot';
 import { formatDuration } from '../../modules/navigation/geo';
 import { RESERVE_SOC_PCT } from '../../config/assumptions';
+import { computeEnvironmentFactors } from '../../modules/intelligence/EnvironmentFactors';
+import { fetchAIAdvice } from '../../modules/intelligence/AIAdvisor';
 import { ConfidenceBadge } from '../cockpit/ConfidenceBadge';
 import { SocSlider } from '../cockpit/SocSlider';
 import { EnvironmentAdjust } from '../cockpit/EnvironmentAdjust';
@@ -11,6 +16,11 @@ import { EnvironmentAdjust } from '../cockpit/EnvironmentAdjust';
 * ESTADO 2 — Destino escolhido. O card de decisao:
 * metricas, TIMELINE ENERGETICA (agora → parada ⚡ → destino) e UMA
 * conclusao clara. Botao grande: INICIAR VIAGEM.
+*
+* O veredito comeca baseado em regras (instantaneo, sempre funciona).
+* Quando /api/ai-advice responde, ele e trocado pelo paragrafo da Gemini
+* (mesma frase, so mais natural) — se a IA falhar ou a chave nao estiver
+* configurada ainda, o veredito por regras continua ali, sem erro visivel.
 */
 
 export function PlanningScreen() {
@@ -22,13 +32,45 @@ const chargingStop = useAppStore((s) => s.chargingStop);
 const cancelPlanning = useAppStore((s) => s.cancelPlanning);
 const startNavigation = useAppStore((s) => s.startNavigation);
 const soc = useVehicleStore((s) => s.data.soc);
-const { horizon, confidence } = useCopilot();
+const { horizon, confidence, nominalWhPerKm } = useCopilot();
+const drivingProfile = useAppSettingsStore((s) => s.drivingProfile);
+const environmentInput = useEnvironmentStore((s) => s.environment);
+const [aiAdvice, setAiAdvice] = useState<string | null>(null);
 
 const chargeMin = chargingStop?.chargeMin ?? 0;
 const arrivalTime = plan ? new Date(Date.now() + (plan.durationMin + chargeMin) * 60000) : null;
 const socArrival = chargingStop ? chargingStop.socAtArrivalPct : horizon?.socAtArrivalPct ?? null;
 const needsCharge = chargingStop !== null || (socArrival !== null && socArrival < RESERVE_SOC_PCT);
 const tight = socArrival !== null && !needsCharge && socArrival < RESERVE_SOC_PCT + 8;
+
+// Consultor IA: dispara quando a viagem "assenta" (rota calculada, soc conhecido).
+// Cancela a chamada anterior se o contexto mudar antes de responder.
+useEffect(() => {
+setAiAdvice(null);
+if (!plan || planning || soc === null || !destination) return;
+const controller = new AbortController();
+const { factors } = computeEnvironmentFactors(environmentInput);
+fetchAIAdvice(
+{
+vehicleName: 'seu carro',
+destinationName: destination.name.split(',')[0],
+distanceKm: Math.round(plan.distanceKm),
+durationMin: Math.round(plan.durationMin + chargeMin),
+socNowPct: soc,
+socAtArrivalPct: socArrival,
+needsCharge,
+chargeMin: chargingStop?.chargeMin ?? null,
+chargerName: chargingStop?.charger ? chargingStop.charger.name.split(/[,-]/)[0].trim() : null,
+consumptionWhPerKm: horizon ? Math.round(horizon.avgWhPerKm) : 0,
+nominalWhPerKm,
+drivingProfile,
+environmentFactors: factors,
+},
+controller.signal
+).then((r) => { if (r.ok) setAiAdvice(r.advice); });
+return () => controller.abort();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [plan, planning, soc, destination, socArrival, needsCharge, chargingStop, drivingProfile, environmentInput]);
 
 return (
 <div className="plan-sheet">
@@ -117,13 +159,18 @@ return (
 
 <div className={'plan-verdict ' + (needsCharge ? 'tone-warn' : tight ? 'tone-warn' : 'tone-good')}>
 <span className="ai-dot" />
-{chargingStop
+<span>
+{aiAdvice && <span className="plan-verdict-tag">IA</span>}
+{aiAdvice
+? aiAdvice
+: chargingStop
 ? '1 parada de recarga · ' + (chargingStop.charger ? chargingStop.charger.name.split(/[,-]/)[0].trim() : 'próxima ao km ' + chargingStop.km) + ' · ~' + chargingStop.chargeMin + ' min'
 : needsCharge
 ? 'Será necessário recarregar no caminho.'
 : tight
 ? 'Você chega, mas com margem apertada. Dirija com calma.'
 : 'Não será necessário recarregar.'}
+</span>
 </div>
 
 <button className="btn btn-primary btn-start" onClick={startNavigation} disabled={soc === null}>
