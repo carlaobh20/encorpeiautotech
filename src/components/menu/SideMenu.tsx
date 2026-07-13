@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { useVehicleStore } from '../../stores/vehicleStore';
 import { useVehicleProfileStore } from '../../stores/vehicleProfileStore';
 import { useAppSettingsStore } from '../../stores/appSettingsStore';
+import { useAppStore } from '../../stores/appStore';
+import { useLocationStore } from '../../stores/locationStore';
+import type { Charger } from '../../modules/charging/ChargingEngine';
 
 /**
  * Menu Lateral — centro de configuração do app.
@@ -22,6 +25,7 @@ type View =
   | 'meu-veiculo'
   | 'consumo-bateria'
   | 'carregamento'
+  | 'carregadores'
   | 'perfil-conducao'
   | 'uso-veiculo'
   | 'aparencia'
@@ -44,6 +48,7 @@ const CATEGORIES: MenuCategory[] = [
     title: 'Planejamento',
     items: [
       { label: 'Planejamento de rota', view: 'em-breve' },
+      { label: 'Carregadores', view: 'carregadores' },
       { label: 'Carregamento', view: 'carregamento' },
       { label: 'Consumo e bateria', view: 'consumo-bateria' },
     ],
@@ -142,6 +147,7 @@ export function SideMenu({ open, onClose }: { open: boolean; onClose: () => void
           {view === 'meu-veiculo' && <MeuVeiculoView onBack={() => setView('menu')} />}
           {view === 'consumo-bateria' && <ConsumoBateriaView onBack={() => setView('menu')} />}
           {view === 'carregamento' && <CarregamentoView onBack={() => setView('menu')} />}
+          {view === 'carregadores' && <CarregadoresView onBack={() => setView('menu')} onClose={onClose} />}
           {view === 'perfil-conducao' && <PerfilConducaoView onBack={() => setView('menu')} />}
           {view === 'uso-veiculo' && <UsoVeiculoView onBack={() => setView('menu')} />}
           {view === 'aparencia' && <AparenciaView onBack={() => setView('menu')} />}
@@ -349,6 +355,58 @@ function CarregamentoView({ onBack }: { onBack: () => void }) {
       <p className="side-menu-note">
         Usados no resumo de viagem pra calcular quanto você gastou de energia e quanto teria gasto
         com um carro a combustão equivalente.
+      </p>
+    </div>
+  );
+}
+
+function CarregadoresView({ onBack, onClose }: { onBack: () => void; onClose: () => void }) {
+  const chargers = useAppStore((s) => s.chargers);
+  const chargersLoading = useAppStore((s) => s.chargersLoading);
+  const loadChargersNear = useAppStore((s) => s.loadChargersNear);
+  const chooseDestination = useAppStore((s) => s.chooseDestination);
+  const position = useLocationStore((s) => s.position);
+
+  useEffect(() => {
+    if (position) void loadChargersNear({ lat: position.lat, lng: position.lng });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [position?.lat, position?.lng]);
+
+  function select(c: Charger) {
+    chooseDestination({ name: c.name, lat: c.lat, lng: c.lng });
+    onClose();
+  }
+
+  return (
+    <div>
+      <BackRow onBack={onBack} title="Carregadores" />
+
+      {!position && (
+        <p className="side-menu-empty">Localização indisponível — ative o GPS pra ver carregadores próximos.</p>
+      )}
+      {position && chargersLoading && <p className="side-menu-empty">Consultando rede de recarga…</p>}
+      {position && !chargersLoading && chargers.length === 0 && (
+        <p className="side-menu-empty">
+          {localStorage.getItem('encorpei-auto:ocm-key')
+            ? 'Nenhum carregador encontrado por aqui (base OpenChargeMap).'
+            : 'Rede de carregadores aguardando chave da OpenChargeMap (gratuita).'}
+        </p>
+      )}
+      {position && chargers.length > 0 && (
+        <div className="search-results" style={{ marginTop: 4 }}>
+          {chargers.slice(0, 12).map((c) => (
+            <button key={c.id} className="search-result" onClick={() => select(c)}>
+              <span className="search-result-pin">⚡</span>
+              <span>
+                {c.name}
+                <span className="search-result-sub"> · {c.powerKw} kW · {c.distanceKm.toFixed(1)} km · {c.operator}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="side-menu-note">
+        Toca num carregador pra usar como destino — a viagem é planejada até lá igual a qualquer outro endereço.
       </p>
     </div>
   );
