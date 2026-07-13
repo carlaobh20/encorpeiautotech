@@ -950,8 +950,8 @@ html, body {
   position: absolute;
   left: 0; right: 0; bottom: 0;
   z-index: 11;
-  display: flex; flex-direction: column; gap: 10px;
-  padding: 0 12px calc(12px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 0 12px calc(10px + env(safe-area-inset-bottom));
 }
 
 .nav-battery-card {
@@ -959,38 +959,38 @@ html, body {
   border: 1px solid var(--glass-border-strong);
   backdrop-filter: blur(var(--blur-card));
   -webkit-backdrop-filter: blur(var(--blur-card));
-  border-radius: var(--radius);
-  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  padding: 9px 14px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
 .nav-battery-label {
   font-family: var(--font-mono);
-  font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--text-dim);
 }
 .nav-battery-row {
   display: flex; align-items: center; justify-content: space-between;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .nav-battery-value {
   font-family: var(--font-data);
-  font-size: 40px; font-weight: 700;
+  font-size: 28px; font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--teal);
+  color: var(--text);
 }
-.nav-battery-stepper { display: flex; flex-direction: column; gap: 8px; }
+.nav-battery-stepper { display: flex; flex-direction: row; gap: 6px; }
 .nav-battery-btn {
-  width: 40px; height: 40px;
+  width: 28px; height: 28px;
   border-radius: 50%;
-  background: rgba(61, 220, 196, 0.12);
-  border: 1px solid var(--teal);
-  color: var(--teal);
+  background: var(--glass);
+  border: 1px solid var(--glass-border-strong);
+  color: var(--text);
   font-family: var(--font-data);
-  font-size: 19px; font-weight: 700;
+  font-size: 14px; font-weight: 700;
   line-height: 1;
   cursor: pointer;
 }
-.nav-battery-hint { font-size: 11.5px; color: var(--text-faint); margin-top: 4px; }
+.nav-battery-hint { font-size: 10.5px; color: var(--text-faint); margin-top: 2px; }
 
 .nav-bottom-panel {
   background: var(--glass-strong);
@@ -999,32 +999,32 @@ html, body {
   backdrop-filter: blur(var(--blur-sheet));
   -webkit-backdrop-filter: blur(var(--blur-sheet));
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  padding: 16px 18px calc(14px + env(safe-area-inset-bottom));
-  display: flex; flex-direction: column; gap: 14px;
+  padding: 12px 16px calc(10px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 9px;
   box-shadow: 0 -12px 40px rgba(0,0,0,0.45);
 }
 .nav-split { display: flex; align-items: stretch; }
-.nav-split-col { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.nav-split-divider { width: 1px; background: var(--glass-border); margin: 2px 16px; }
-.nav-split-icon { font-size: 15px; }
+.nav-split-col { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.nav-split-divider { width: 1px; background: var(--glass-border); margin: 1px 14px; }
+.nav-split-icon { font-size: 13px; }
 .nav-split-label {
   font-family: var(--font-mono);
-  font-size: 9.5px; letter-spacing: 0.13em; text-transform: uppercase;
+  font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase;
   color: var(--text-dim);
-  margin-top: 2px;
+  margin-top: 1px;
 }
 .nav-split-value {
   font-family: var(--font-data);
-  font-size: 30px; font-weight: 700;
+  font-size: 23px; font-weight: 700;
   font-variant-numeric: tabular-nums;
-  margin-top: 2px;
+  margin-top: 1px;
 }
-.nav-split-sub { font-size: 11px; color: var(--text-faint); line-height: 1.4; margin-top: 2px; }
+.nav-split-sub { font-size: 10.5px; color: var(--text-faint); line-height: 1.3; margin-top: 1px; }
 
 .nav-stats-row {
   display: grid; grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  padding-top: 10px;
+  gap: 6px;
+  padding-top: 7px;
   border-top: 1px solid var(--glass-border);
 }
 .nav-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -1045,8 +1045,8 @@ html, body {
   background: rgba(255, 107, 107, 0.14);
   border: 1px solid rgba(255, 107, 107, 0.35);
   color: var(--danger);
-  font-size: 15px;
-  padding: 15px;
+  font-size: 14px;
+  padding: 11px;
   border-radius: var(--radius-md);
 }
 
