@@ -3,6 +3,7 @@ import { useVehicleStore } from '../stores/vehicleStore';
 import { useLocationStore } from '../stores/locationStore';
 import { useAppStore, copilotFeed } from '../stores/appStore';
 import { useEnvironmentStore } from '../stores/environmentStore';
+import { useAppSettingsStore } from '../stores/appSettingsStore';
 import { AION_UT_DRIVER } from '../modules/vehicle/drivers/aion-ut';
 import { haversineKm } from '../modules/trip/TripEngine';
 import { predict, type Prediction, type PredictionInput } from '../modules/intelligence/PredictionEngine';
@@ -12,12 +13,27 @@ import { assessConfidence, type ConfidenceReport } from '../modules/intelligence
 import { computeProgress, fetchRoute } from '../modules/navigation/NavigationEngine';
 import { RESERVE_SOC_PCT, ROAD_FACTOR } from '../config/assumptions';
 import { sampleBuffer } from '../modules/telemetry/SampleBuffer';
+import type { EnvironmentInput } from '../modules/intelligence/EnvironmentFactors';
+import type { DrivingProfile } from '../stores/appSettingsStore';
 
 /**
 * Os engines encontram os dados vivos aqui — e em nenhum outro lugar.
 * useCopilot: leitura derivada (previsao, horizon, saude, confianca).
 * useNavigationLoop: o "tick" do modo navegacao (progresso, chegada, IA, reroute).
 */
+
+/**
+ * Perfil de conducao e carga extra (Menu Lateral) entram como DEFAULT do
+ * ambiente — o ajuste manual do dia (EnvironmentAdjust, por viagem) sempre
+ * tem prioridade se o motorista preencheu algo naquela tela.
+ */
+function withUsageDefaults(overrides: EnvironmentInput, drivingProfile: DrivingProfile, extraLoadKg: number): EnvironmentInput {
+return {
+...(drivingProfile !== 'normal' ? { drivingProfile } : {}),
+...(extraLoadKg > 0 ? { extraWeightKg: extraLoadKg } : {}),
+...overrides,
+};
+}
 
 const NOMINAL_WH_KM = Math.round(1000 / AION_UT_DRIVER.nominalKmPerKwh);
 
@@ -41,9 +57,12 @@ const position = useLocationStore((s) => s.position);
 const plan = useAppStore((s) => s.plan);
 const progress = useAppStore((s) => s.progress);
 const mode = useAppStore((s) => s.mode);
-const environment = useEnvironmentStore((s) => s.environment);
+const environmentOverrides = useEnvironmentStore((s) => s.environment);
+const drivingProfile = useAppSettingsStore((s) => s.drivingProfile);
+const extraLoadKg = useAppSettingsStore((s) => s.extraLoadKg);
 
 return useMemo(() => {
+const environment = withUsageDefaults(environmentOverrides, drivingProfile, extraLoadKg);
 // consumo recente (Wh/km)
 let consumption = NOMINAL_WH_KM;
 let consumptionObserved = false;
@@ -108,10 +127,10 @@ consumptionWhPerKm: Math.round(consumption),
 efficiencyKwh100: Math.round(consumption) / 10,
 nominalWhPerKm: NOMINAL_WH_KM,
 };
-}, [data, currentTrip, hasTelemetrySoc, manualSoc, position, plan, progress, mode, environment]);
+}, [data, currentTrip, hasTelemetrySoc, manualSoc, position, plan, progress, mode, environmentOverrides, drivingProfile, extraLoadKg]);
 }
 
-/** O tick do modo navegacao. Montar UMA vez (na NavigationScreen). */
+/** O tick do modo navegacao. Montar UMA vej (na NavigationScreen). */
 export function useNavigationLoop() {
 const mode = useAppStore((s) => s.mode);
 const offRouteTicks = useRef(0);
@@ -154,7 +173,8 @@ if (mode !== 'navigation') return;
 const timer = setInterval(() => {
 const app = useAppStore.getState();
 const veh = useVehicleStore.getState();
-const environment = useEnvironmentStore.getState().environment;
+const settings = useAppSettingsStore.getState();
+const environment = withUsageDefaults(useEnvironmentStore.getState().environment, settings.drivingProfile, settings.extraLoadKg);
 let d = veh.data;
 
 let consumption: number | null = d.consumptionKwh100 !== null ? d.consumptionKwh100 * 10 : null;
@@ -189,7 +209,7 @@ navigating: true,
 socPct: d.soc,
 socAtArrivalPct: socAtArrival,
 speedKmh: d.speedKmh,
-powerKw: d.powerKw,
+powerKw: d.powerKd,
 batteryTempC: d.batteryTempC,
 regenKwhTrip: trip?.energyRegenKwh ?? 0,
 consumptionWhPerKm: consumption,
