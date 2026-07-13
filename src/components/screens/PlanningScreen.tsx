@@ -5,7 +5,7 @@ import { useAppSettingsStore } from '../../stores/appSettingsStore';
 import { useEnvironmentStore } from '../../stores/environmentStore';
 import { useCopilot } from '../../hooks/useCopilot';
 import { formatDuration } from '../../modules/navigation/geo';
-import { RESERVE_SOC_PCT } from '../../config/assumptions';
+import { RESERVE_SOC_PCT, ENERGY_TARIFF_BRL_KWH, GAS_PRICE_BRL_L, GAS_KM_PER_L } from '../../config/assumptions';
 import { computeEnvironmentFactors } from '../../modules/intelligence/EnvironmentFactors';
 import { fetchAIAdvice } from '../../modules/intelligence/AIAdvisor';
 import { ConfidenceBadge } from '../cockpit/ConfidenceBadge';
@@ -42,6 +42,15 @@ const arrivalTime = plan ? new Date(Date.now() + (plan.durationMin + chargeMin) 
 const socArrival = chargingStop ? chargingStop.socAtArrivalPct : horizon?.socAtArrivalPct ?? null;
 const needsCharge = chargingStop !== null || (socArrival !== null && socArrival < RESERVE_SOC_PCT);
 const tight = socArrival !== null && !needsCharge && socArrival < RESERVE_SOC_PCT + 8;
+
+// Custo estimado — energia necessaria (kWh) x tarifa que o usuario configurou
+// em Menu > Carregamento. So a energia de casa/tomada normal entra na conta:
+// carregadores publicos ainda nao tem preco (nenhuma API gratuita no Brasil
+// expoe isso hoje — ver ChargingEngine.priceBrlKwh, sempre null).
+const energyNeededKwh = horizon?.energyNeededKwh ?? null;
+const costEv = energyNeededKwh !== null ? energyNeededKwh * ENERGY_TARIFF_BRL_KWH : null;
+const costGas = plan ? (plan.distanceKm / GAS_KM_PER_L) * GAS_PRICE_BRL_L : null;
+const savedVsGas = costEv !== null && costGas !== null ? costGas - costEv : null;
 
 // Consultor IA: dispara quando a viagem "assenta" (rota calculada, soc conhecido).
 // Cancela a chamada anterior se o contexto mudar antes de responder.
@@ -126,7 +135,20 @@ return (
 <div className="sum-metric-value">{horizon ? (horizon.avgWhPerKm / 10).toFixed(1).replace('.', ',') : '—'}</div>
 <div className="sum-metric-label">kWh/100km prev.</div>
 </div>
+<div className="sum-metric">
+<div className="sum-metric-value">{costEv !== null ? 'R$ ' + costEv.toFixed(2).replace('.', ',') : '—'}</div>
+<div className="sum-metric-label">Custo estimado</div>
 </div>
+</div>
+
+{costEv !== null && (
+<div className="plan-cost-note">
+{savedVsGas !== null && savedVsGas > 1
+? '~R$ ' + savedVsGas.toFixed(0) + ' mais barato que gasolina nesse trajeto · '
+: ''}
+tarifa de R$ {ENERGY_TARIFF_BRL_KWH.toFixed(2).replace('.', ',')}/kWh (Menu → Carregamento) · não inclui recarga paga em carregador público, sem dado de preço disponível
+</div>
+)}
 
 {/* TIMELINE ENERGETICA — a viagem como linha de energia */}
 {soc !== null && (
