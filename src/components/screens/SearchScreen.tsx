@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore, geocode, type Place } from '../../stores/appStore';
-import { useLocationStore } from '../../stores/locationStore';
 import { HealthChip } from '../dashboard/HealthCard';
 
 /**
@@ -10,6 +9,11 @@ import { HealthChip } from '../dashboard/HealthCard';
  * Sem chips de Casa/Trabalho/recentes por pedido do Carlos — a tela
  * inicial nao expoe enderecos salvos. O botao do menu lateral saiu do
  * header e virou um FAB fixo no canto inferior direito.
+ *
+ * Carregadores saiu daqui e virou uma categoria real do Menu Lateral
+ * (mesma logica, so mudou de lugar). No lugar do chip, a caixa de busca
+ * ganhou uma estrela de favoritos: toca pra ver os lugares salvos, ou
+ * favorita um resultado de busca direto na lista.
  */
 
 export function SearchScreen({
@@ -20,15 +24,13 @@ export function SearchScreen({
   onOpenMenu: () => void;
 }) {
   const chooseDestination = useAppStore((s) => s.chooseDestination);
-  const loadChargersNear = useAppStore((s) => s.loadChargersNear);
-  const chargers = useAppStore((s) => s.chargers);
-  const chargersLoading = useAppStore((s) => s.chargersLoading);
-  const position = useLocationStore((s) => s.position);
+  const places = useAppStore((s) => s.places);
+  const toggleFavorite = useAppStore((s) => s.toggleFavorite);
 
   const [q, setQ] = useState('');
   const [results, setResults] = useState<Place[]>([]);
   const [searching, setSearching] = useState(false);
-  const [showChargers, setShowChargers] = useState(false);
+  const [showFavorites, setShowFavorites] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -46,13 +48,26 @@ export function SearchScreen({
     chooseDestination(p);
   }
 
-  function chip(label: string, icon: string, onClick: () => void, sub?: string) {
+  function isFavorite(name: string) {
+    return places.favorites.some((f) => f.name === name);
+  }
+
+  function favRow(p: Place, key: string | number) {
+    const fav = isFavorite(p.name);
     return (
-      <button className="search-chip" onClick={onClick}>
-        <span className="search-chip-icon">{icon}</span>
-        <span className="search-chip-label">{label}</span>
-        {sub && <span className="search-chip-sub">{sub}</span>}
-      </button>
+      <div className="search-result-row" key={key}>
+        <button className="search-result" onClick={() => pick(p)}>
+          <span className="search-result-pin">📍</span>
+          <span>{p.name}</span>
+        </button>
+        <button
+          className={`search-result-fav${fav ? ' search-result-fav-active' : ''}`}
+          onClick={() => toggleFavorite(p)}
+          aria-label={fav ? 'Remover dos favoritos' : 'Salvar nos favoritos'}
+        >
+          {fav ? '★' : '☆'}
+        </button>
+      </div>
     );
   }
 
@@ -78,53 +93,33 @@ export function SearchScreen({
             onChange={(e) => setQ(e.target.value)}
             autoComplete="off"
           />
+          <button
+            className={`search-star${showFavorites ? ' search-star-active' : ''}`}
+            onClick={() => setShowFavorites((v) => !v)}
+            aria-label="Favoritos"
+          >
+            {showFavorites ? '★' : '☆'}
+          </button>
         </div>
 
         {q.trim().length >= 3 && (
           <div className="search-results">
             {searching && <div className="search-hint">Buscando…</div>}
             {!searching && results.length === 0 && <div className="search-hint">Nenhum resultado. Tente incluir a cidade.</div>}
-            {results.map((r, i) => (
-              <button key={i} className="search-result" onClick={() => pick(r)}>
-                <span className="search-result-pin">📍</span>
-                <span>{r.name}</span>
-              </button>
-            ))}
+            {results.map((r, i) => favRow(r, i))}
           </div>
         )}
 
-        {q.trim().length < 3 && !showChargers && (
-          <div className="search-chips">
-            {chip('Carregadores', '⚡', () => {
-              setShowChargers(true);
-              if (position) loadChargersNear({ lat: position.lat, lng: position.lng });
-            })}
-          </div>
-        )}
-
-        {showChargers && (
+        {q.trim().length < 3 && showFavorites && (
           <div className="search-results">
             <div className="search-results-head">
-              <span>Carregadores próximos</span>
-              <button className="search-cancel" onClick={() => setShowChargers(false)}>✕</button>
+              <span>Favoritos</span>
+              <button className="search-cancel" onClick={() => setShowFavorites(false)}>✕</button>
             </div>
-            {chargersLoading && <div className="search-hint">Consultando rede de recarga…</div>}
-            {!chargersLoading && chargers.length === 0 && (
-              <div className="search-hint">
-                {localStorage.getItem('encorpei-auto:ocm-key')
-                  ? 'Nenhum carregador encontrado por aqui (base OpenChargeMap).'
-                  : 'Rede de carregadores aguardando chave da OpenChargeMap (gratuita).'}
-              </div>
+            {places.favorites.length === 0 && (
+              <div className="search-hint">Nenhum favorito ainda. Busque um endereço e toque na estrela pra salvar.</div>
             )}
-            {chargers.slice(0, 6).map((c) => (
-              <button key={c.id} className="search-result" onClick={() => chooseDestination({ name: c.name, lat: c.lat, lng: c.lng })}>
-                <span className="search-result-pin">⚡</span>
-                <span>
-                  {c.name}
-                  <span className="search-result-sub"> · {c.powerKw} kW · {c.distanceKm.toFixed(1)} km · {c.operator}</span>
-                </span>
-              </button>
-            ))}
+            {places.favorites.map((p, i) => favRow(p, i))}
           </div>
         )}
       </div>
