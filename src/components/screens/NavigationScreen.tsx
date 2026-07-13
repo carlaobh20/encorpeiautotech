@@ -99,26 +99,20 @@ return (
 </div>
 
 <div className="nav-bottom-stack">
-{!hasTelemetry && (
-<div className="nav-battery-card">
-<div className="nav-battery-label">BATERIA ATUAL</div>
-<div className="nav-battery-row">
-<span className="nav-battery-value">{manualDisplay}%</span>
-<div className="nav-battery-stepper">
-<button className="nav-battery-btn" onClick={() => stepSoc(1)} aria-label="Aumentar 1%">+</button>
-<button className="nav-battery-btn" onClick={() => stepSoc(-1)} aria-label="Diminuir 1%">−</button>
-</div>
-</div>
-<div className="nav-battery-hint">Ajuste manual em tempo real</div>
-</div>
-)}
-
 <div className="nav-bottom-panel">
 <div className="nav-split">
 <div className="nav-split-col">
 <span className="nav-split-icon">🔋</span>
 <span className="nav-split-label">BATERIA ATUAL</span>
+{!hasTelemetry ? (
+<div className="nav-split-value-row">
+<button className="nav-battery-btn" onClick={() => stepSoc(-1)} aria-label="Diminuir 1%">−</button>
+<span className="nav-split-value">{manualDisplay}%</span>
+<button className="nav-battery-btn" onClick={() => stepSoc(1)} aria-label="Aumentar 1%">+</button>
+</div>
+) : (
 <span className="nav-split-value">{data.soc !== null ? Math.round(data.soc) : '—'}%</span>
+)}
 <span className="nav-split-sub">Autonomia estimada<br />{rangeNowKm !== null ? rangeNowKm + ' km' : '—'}</span>
 </div>
 <div className="nav-split-divider" />
