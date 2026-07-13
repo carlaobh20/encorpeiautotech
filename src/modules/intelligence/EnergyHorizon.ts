@@ -45,7 +45,7 @@ export function computeHorizon(
 ): EnergyHorizon {
   const remainingKm = Math.max(0.01, plan.distanceKm - fromKm);
 
-  const env = computeEnvironmentFactors(environment, Math.max(20, observedSpeedKmh));
+  const env = computeEnvironmentFactors(environment, Math.max(20, observedSpeedKmh), remainingKm);
   const withEnv = (baseWhPerKm: number) => Math.max(80, baseWhPerKm * env.multiplier + env.climateAddWhPerKm);
 
   // 1) Consumo previsto por trecho (usa a velocidade estimada de cada leg)
